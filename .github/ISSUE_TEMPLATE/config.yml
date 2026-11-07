@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/AIwork4me/Antigravity-Gemma-ROCm/discussions
+    about: Questions, hardware reports that are not bugs, and show-and-tell
+  - name: 📖 Troubleshooting guide
+    url: https://github.com/AIwork4me/Antigravity-Gemma-ROCm/blob/main/docs/TROUBLESHOOTING.md
+    about: Common install / GPU / model issues before you open an issue
