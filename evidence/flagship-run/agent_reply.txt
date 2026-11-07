@@ -1,6 +1,3 @@
-The issue was in the `median` function within `stats_utils.py`. For lists with an even number of elements, it was returning the lower middle element instead of the average of the two middle elements.
+The `median` function in `stats_utils.py` was incorrectly returning the lower middle element for even-length lists instead of the average of the two middle elements. I fixed this by updating the return statement to calculate the average of `vals[mid - 1]` and `vals[mid]`.
 
-I fixed this by updating the return statement for even-length lists to:
-`return (vals[mid - 1] + vals[mid]) / 2`
-
-All tests in `tests/test_stats.py` are now passing.
+All tests in `tests/test_stats.py` now pass.

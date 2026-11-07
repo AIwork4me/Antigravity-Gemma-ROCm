@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/AIwork4me/Antigravity-Gemma-ROCm/actions/workflows/ci.yml/badge.svg)](https://github.com/AIwork4me/Antigravity-Gemma-ROCm/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](requirements.txt)
+[![Python 3.12–3.13](https://img.shields.io/badge/python-3.12%20%E2%80%93%203.13-blue.svg)](requirements.txt)
 [![code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](ruff.toml)
 
 [中文说明见 README.zh-CN.md](README.zh-CN.md)
@@ -58,6 +58,7 @@ winget install --id Ollama.Ollama -e --accept-source-agreements --accept-package
 ollama pull gemma4:26b
 
 # 3) Project deps (isolated venv — never touches your base Python)
+#    Python 3.12-3.13 are the CI-tested versions (SDK floor is 3.10)
 git clone https://github.com/AIwork4me/Antigravity-Gemma-ROCm.git
 cd Antigravity-Gemma-ROCm
 python -m venv .venv
@@ -116,7 +117,7 @@ is exactly that.
 │  google-antigravity SDK 0.1.23 ── harness: bin/localharness.exe   │
 │      ├─ tools: view_file / create_file / edit_file / run_command  │
 │      ├─ B1 file boundary : paths must resolve inside workspace    │
-│      ├─ B2 shell boundary: pytest/python whitelist, no metachars  │
+│      ├─ B2 shell boundary: structured pytest-only allowlist + Cwd  │
 │      └─ OpenAI-compatible HTTP ──► Ollama @ 127.0.0.1:11434       │
 │                                       └─ rocm_v7_1 runner         │
 │                                            └─► Radeon 8060S       │
@@ -166,15 +167,21 @@ PR a row into this table — that's how the 🟡 rows turn ✅.
 
 ## Security boundaries (the honest version)
 
-- **Two independent boundaries** guard the agent: file-path authorization
-  (reparse-point-aware workspace resolution) and shell-process permission (strict
-  pytest/python whitelist; any shell metacharacter is rejected). Red-team suite:
-  `tests/test_security_boundaries.py` (junction escape, `..` traversal, `\\?\` paths,
-  metachar injection, Cwd redirection, …).
-- **No OS-level sandbox** exists for the SDK's shell subprocesses on Windows; we do not
-  pretend otherwise. Mitigations: whitelisting + audit logs + the option to run the
-  driver under a low-privilege account or wire an ask-a-human handler (`policy.ask_user`)
-  for `run_command`.
+- **Three policy boundaries** guard the agent: file-path authorization
+  (reparse-point-aware workspace resolution); shell-process permission (structured,
+  fail-closed validation of executable + arguments + in-workspace `Cwd` — only
+  `python -m pytest` / `pytest` invocations pass; unknown schemas, arbitrary scripts,
+  `-c` code evaluation and any shell metacharacter are denied); and the loopback web
+  dashboard (Host/Origin/CSRF checks, non-blocking SSE, validated replay input).
+  Red-team suites: `tests/test_security_boundaries.py` (junction escape, `..`
+  traversal, `\?\` paths, metachar injection, Cwd redirection, prefix lookalikes, …)
+  and `tests/test_webui_http.py` (cross-origin run attempts, DNS rebinding, replay
+  bounds).
+- **No OS-level sandbox** exists for the SDK's shell subprocesses on Windows, and a
+  pytest allowlist is not a sandbox — pytest runs whatever test code sits in the
+  workspace. Keep the demo in its disposable workspace; for arbitrary imported repos
+  use `build_config(enable_shell=False)` or add human approval plus a low-privilege
+  account. Details: [SECURITY.md](SECURITY.md).
 - Physical network isolation requires manual action; the software-level isolation proof
   and the manual procedure are in
   [docs/OFFLINE_VALIDATION.md](docs/OFFLINE_VALIDATION.md).
@@ -203,8 +210,11 @@ Start with [`evidence/flagship-run/`](evidence/flagship-run/) — one complete p
 mission → tool calls → policy audit → pytest red/green → SHA256 before/after → diff.
 The **full evidence tree** (345+ files: backend A/B probes, 10-run stability matrix,
 offline isolation proof, independent RC1 audit) ships as
-`evidence-bundle-v1.0.0.zip` on the [v1.0.0 release](../../releases), inner
-`SHA256SUMS.txt` included. Deep-dive reports live in [docs/](docs/):
+`evidence-bundle-v1.0.0.zip` on the [v1.0.0 release](../../releases/tag/v1.0.0),
+inner `SHA256SUMS.txt` included; v1.0.1 adds
+`evidence-bundle-v1.0.1.zip` carrying the T1.x security-hardening evidence chain —
+see [docs/RELEASE_V1_0_1_VERIFICATION.md](docs/RELEASE_V1_0_1_VERIFICATION.md).
+Deep-dive reports live in [docs/](docs/):
 [RC1_INDEPENDENT_AUDIT](docs/RC1_INDEPENDENT_AUDIT.md) ·
 [SECURITY_BOUNDARY_REVIEW](docs/SECURITY_BOUNDARY_REVIEW.md) ·
 [OFFLINE_VALIDATION](docs/OFFLINE_VALIDATION.md) ·
@@ -223,9 +233,9 @@ first PR is a hardware-table row.
 
 ## Talk & credits
 
-This project premiered at a GDG DevFest talk on fully-local AI coding agents
-(ROCm + Gemma + Antigravity SDK on Ryzen AI MAX). Built on the shoulders of:
-[Gemma](https://ai.google.dev/gemma) · [Ollama](https://ollama.com) ·
+This project is being prepared for a GDG DevFest talk on fully-local AI coding
+agents (ROCm + Gemma + Antigravity SDK on Ryzen AI MAX). Built on the shoulders
+of: [Gemma](https://ai.google.dev/gemma) · [Ollama](https://ollama.com) ·
 [AMD ROCm](https://www.amd.com/en/products/software/adrenalin/rocm.html) ·
 google-antigravity SDK.
 

@@ -18,13 +18,34 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import json
 import sys
+import time
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from publish_export import redact_text  # noqa: E402
+
+TEXT_SUFFIXES = {
+    ".py",
+    ".md",
+    ".ps1",
+    ".sh",
+    ".txt",
+    ".ini",
+    ".patch",
+    ".json",
+    ".yml",
+    ".yaml",
+    ".toml",
+    ".log",
+    ".xml",  # review R1 F-1: xml is redacted+scanned text, not opaque binary
+}
 
 CHAIN_FILES = (
     "mission.txt",
@@ -89,8 +110,15 @@ def pick_flagship(artifacts: Path) -> Path:
     return candidates[0]
 
 
-def build_bundle(src: Path, dest: Path, name: str = "evidence-bundle-v1.0.0.zip") -> Path:
-    """Zip the artifacts tree with an inner SHA256SUMS.txt; return the zip path."""
+def build_bundle(src: Path, dest: Path, name: str = "evidence-bundle-v1.0.1.zip") -> Path:
+    """Zip the artifacts tree with an inner SHA256SUMS.txt; return the zip path.
+
+    T1.1: every TEXT member is path-redacted before hashing/zipping (the
+    SHA256SUMS manifest therefore describes the redacted bytes — what ships),
+    and a `<zip>.sha256` sidecar records the archive's own hash. The sidecar
+    is an accidental-drift check, not tamper-proofing — it is not signed.
+    v1.0.0 is left untouched.
+    """
     src = Path(src)
     if not src.is_dir():
         raise SystemExit(f"artifacts dir not found: {src}")
@@ -98,15 +126,51 @@ def build_bundle(src: Path, dest: Path, name: str = "evidence-bundle-v1.0.0.zip"
     dest.mkdir(parents=True, exist_ok=True)
     out = dest / name
 
-    files = sorted(p for p in src.rglob("*") if p.is_file() and not p.name.endswith(".log.tmp"))
-    sums = "\n".join(f"{sha256_of(p)}  {p.relative_to(src).as_posix()}" for p in files)
+    # dev working outputs never ship in a release bundle: scanner reports
+    # contain the finding snippets they flagged (incl. serial-like samples),
+    # and gpuval console captures duplicate the structured evidence dirs
+    # (names are pinned to the gpuval- prefix so no legitimate evidence
+    # ending in console.log can be swallowed — review T1.1 F-12).
+    # dxdiag dumps additionally embed MachineName/serial-shaped identifiers
+    # that redaction does not rewrite — excluded outright (review R1 F-1).
+    BUNDLE_EXCLUDE = (
+        "release_scan*.json",
+        "gpuval*-console.log",
+        "*.log.tmp",
+        "dxdiag*.xml",
+    )
+    files = sorted(
+        p
+        for p in src.rglob("*")
+        if p.is_file() and not any(fnmatch.fnmatch(p.name, pat) for pat in BUNDLE_EXCLUDE)
+    )
+
+    def member_bytes(p: Path) -> bytes:
+        if p.suffix in TEXT_SUFFIXES:
+            text, _ = redact_text(p.read_text(encoding="utf-8", errors="replace"))
+            return text.encode("utf-8")
+        return p.read_bytes()
+
+    payloads = {p: member_bytes(p) for p in files}
+    sums = "\n".join(
+        f"{hashlib.sha256(payloads[p]).hexdigest()}  {p.relative_to(src).as_posix()}" for p in files
+    )
 
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         for p in files:
-            z.write(p, p.relative_to(src).as_posix())
+            z.writestr(p.relative_to(src).as_posix(), payloads[p])
         z.writestr("SHA256SUMS.txt", sums + "\n")
-    print(f"[bundle] {len(files)} files -> {out} ({out.stat().st_size / 2**20:.1f} MiB)")
-    print(f"[bundle] bundle sha256: {sha256_of(out)}")
+    digest = sha256_of(out)
+    (dest / f"{name}.sha256").write_text(
+        f"{digest}  {name}\n"
+        f"built_utc={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} "
+        f"members={len(files)} bytes={out.stat().st_size}\n",
+        encoding="utf-8",
+    )
+    print(
+        f"[bundle] {len(files)} files (text members redacted) -> {out} ({out.stat().st_size / 2**20:.1f} MiB)"
+    )
+    print(f"[bundle] bundle sha256: {digest}")
     return out
 
 

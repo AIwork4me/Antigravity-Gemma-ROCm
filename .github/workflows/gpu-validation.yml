@@ -1,0 +1,163 @@
+name: GPU physical validation (opt-in, protected)
+
+# NEVER runs automatically and NEVER on fork PRs (workflow_dispatch requires
+# write access and the job `if` below restricts execution further). Physical
+# hardware gate: dispatch manually on a self-hosted Windows runner with
+# Ollama + an AMD GPU (ROCm) and the reference model pulled. Produces honest
+# PASS / FAIL / BLOCKED evidence — a CPU CI runner must never produce a GPU
+# "PASS".
+#
+# Runner-security model (T1.1 / tightened T1.2):
+#   - untrusted dispatch inputs NEVER touch a shell string: they travel via
+#     environment variables and are validated (charset, one line, \Z anchor,
+#     booleans literal) by a dedicated fail-closed step before anything runs
+#   - `environment: gpu-validation` routes dispatch through a protected
+#     environment — the owner MUST configure required reviewers there;
+#     until then it is NOT an approval gate. The `if:` ref guard below is a
+#     fuse against typos/forks, NOT a security approval: repo writers can
+#     dispatch on main, only the environment reviewers gate them.
+#   - execution is restricted to THIS repo's main branch only — no tags
+#     (a writer-pushed tag must never reach persistent self-hosted runners)
+#   - checkout persists no credentials; job permissions are read-only
+#   - concurrency=1 protects the physical machine from overlapping runs
+#   - result classification step separates full GPU PASS from ENV_PROBE_*:
+#     an env probe is honest diagnostics and can NEVER satisfy the release
+#     gate for a full validation — invariant: a GREEN gpu-validate job means
+#     exactly "sealed full GPU PASS", nothing weaker
+#   - uploaded artifacts are redacted by scripts/gpu_validate.py itself
+#     (owned-server.log is rewritten redacted on every stop() path)
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Ollama model tag (default gemma4:26b)"
+        required: false
+        default: "gemma4:26b"
+      run_agent:
+        description: "Run the live agent stage (red->green)"
+        type: boolean
+        required: false
+        default: true
+      evict_shared_models:
+        description: "DISRUPTIVE opt-in: evict models resident on the shared 11434 server first"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpu-validation
+  cancel-in-progress: false
+
+jobs:
+  gpu-validate:
+    # ONLY this repository's main branch — never forks, never arbitrary
+    # branches or writer-pushed tags executing on persistent self-hosted
+    # GPU runners
+    if: >-
+      github.repository == 'AIwork4me/Antigravity-Gemma-ROCm' &&
+      github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, ROCm]
+    timeout-minutes: 45
+    environment: gpu-validation
+    outputs:
+      result_class: ${{ steps.classify.outputs.result_class }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate dispatch inputs (fail closed)
+        shell: python
+        env:
+          GPUVAL_MODEL: ${{ inputs.model }}
+          GPUVAL_RUN_AGENT: ${{ inputs.run_agent }}
+          GPUVAL_EVICT_SHARED: ${{ inputs.evict_shared_models }}
+        run: |
+          import os, re, sys
+          tag = os.environ.get("GPUVAL_MODEL", "")
+          valid = bool(re.match(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}\Z", tag))
+          flags = {k: os.environ.get(k, "") for k in ("GPUVAL_RUN_AGENT", "GPUVAL_EVICT_SHARED")}
+          flags_ok = all(v in ("true", "false") for v in flags.values())
+          print(("VALID model tag: " if valid else "REJECTED model tag: ") + repr(tag))
+          if not flags_ok:
+              print("REJECTED non-literal boolean inputs: " + repr(flags))
+          sys.exit(0 if (valid and flags_ok) else 2)
+
+      - name: Set up venv
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+
+      - name: Physical GPU validation
+        timeout-minutes: 40
+        shell: pwsh
+        env:
+          GPUVAL_MODEL: ${{ inputs.model }}
+          GPUVAL_RUN_AGENT: ${{ inputs.run_agent }}
+          GPUVAL_EVICT_SHARED: ${{ inputs.evict_shared_models }}
+        run: |
+          $gv = @("--model", $env:GPUVAL_MODEL, "--require-backend", "ROCm")
+          if ($env:GPUVAL_EVICT_SHARED -eq "true") { $gv += "--evict-shared-models" }
+          if ($env:GPUVAL_RUN_AGENT -eq "true") { $gv += "--with-agent" } else { $gv += "--no-agent" }
+          .\.venv\Scripts\python.exe scripts\gpu_validate.py @gv
+
+      - name: Classify validation result (full GPU PASS vs ENV_PROBE)
+        id: classify
+        if: always()
+        shell: python
+        env:
+          GPUVAL_RUN_AGENT: ${{ inputs.run_agent }}
+        run: |
+          import glob, json, os, sys
+          reports = sorted(glob.glob("artifacts/gpu-validation/*/env.json"))
+          if not reports:
+              print("no env.json produced - treating as BLOCKED")
+              result_class, ok = "blocked", False
+          else:
+              env_path = reports[-1]
+              run_dir = os.path.dirname(env_path)
+              sealed = os.path.exists(os.path.join(run_dir, "seal.json"))
+              with open(env_path, encoding="utf-8") as f:
+                  rep = json.load(f)
+              overall, scope = rep.get("overall"), rep.get("scope")
+              want_full = os.environ.get("GPUVAL_RUN_AGENT") == "true"
+              if overall == "PASS" and scope == "full" and sealed:
+                  result_class, ok = "full-pass", True
+              elif overall in ("PASS", "ENV_PROBE_PASS") and not sealed:
+                  # env.json without seal.json = the validator died between
+                  # writing the report and sealing it (R1 F-4) - never green
+                  result_class, ok = "unsealed", False
+                  print("RELEASE GATE: run report exists but seal.json is MISSING - "
+                        "the evidence is not sealed, refusing to classify as pass")
+              elif overall == "ENV_PROBE_PASS":
+                  # R1 F-8: an environment probe is honest diagnostics, NOT a
+                  # validation - the job stays non-green so no release gate can
+                  # ever point at a green "GPU validation" from an env probe
+                  result_class, ok = "env-probe-pass", False
+                  print("ENV_PROBE_PASS: environment probe only - NOT a full GPU "
+                        "validation; this job is intentionally non-green")
+              elif overall == "FAIL":
+                  result_class, ok = "fail", False
+              else:
+                  result_class, ok = "blocked", False
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as s:
+                  s.write("\n## GPU validation result\n\n"
+                          f"- overall: **{overall}**\n- scope: {scope}\n"
+                          f"- sealed: {sealed}\n"
+                          f"- full GPU PASS: **{overall == 'PASS' and scope == 'full' and sealed}**\n")
+              if want_full and result_class != "full-pass" and result_class not in ("fail", "blocked"):
+                  print("RELEASE GATE: run_agent was requested but this is NOT a full GPU PASS")
+          with open(os.environ.get("GITHUB_OUTPUT", os.devnull), "a", encoding="utf-8") as f:
+              f.write(f"result_class={result_class}\n")
+          sys.exit(0 if ok else 1)
+
+      - name: Upload evidence (redacted by the validation script)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-validation-${{ github.run_id }}
+          path: artifacts/gpu-validation/
+          if-no-files-found: ignore

@@ -1,12 +1,12 @@
 {
-  "run_id": "demo3",
+  "run_id": "gpuval-20261107-202720",
   "model": "gemma4:26b",
   "bug_present_before": true,
   "bug_fixed_after": true,
   "files_changed": [
     "stats_utils.py"
   ],
-  "elapsed_s": 74.0,
+  "elapsed_s": 71.4,
   "n_tool_calls": 5,
   "tool_names": [
     "view_file",

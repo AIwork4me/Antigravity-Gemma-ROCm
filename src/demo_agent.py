@@ -19,7 +19,9 @@ import argparse
 import asyncio
 import hashlib
 import json
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -37,7 +39,7 @@ MISSION = (
     "The pytest suite is currently failing. Your task:\n"
     "1. List the files in the workspace to understand the project.\n"
     "2. Read the source file stats_utils.py and the tests in tests/test_stats.py.\n"
-    "3. Run the test suite with: python -m pytest tests/ -q\n"
+    "3. Run the test suite from the workspace root with: python -m pytest tests/ -q\n"
     "4. Find the bug that makes the failing tests fail, fix it by editing stats_utils.py.\n"
     "5. Re-run the tests and confirm they all pass.\n"
     "6. Reply with a short summary of the root cause and your fix.\n"
@@ -64,22 +66,72 @@ def workspace_state(ws: Path) -> dict:
     }
 
 
+def _is_reparse(p: Path) -> bool:
+    """Junction or symlink (Windows junctions are NOT is_symlink())."""
+    try:
+        return p.is_symlink() or os.path.isjunction(p)
+    except OSError:
+        return True  # cannot tell -> treat as reparse point, never follow
+
+
+def _remove_link(link: Path) -> None:
+    """Remove a reparse point itself, never its target."""
+    try:
+        link.unlink()
+    except OSError:
+        link.rmdir()  # directory junctions remove with rmdir
+
+
+def _force_unlink(p: Path) -> None:
+    """unlink that clears Windows read-only bits first (partial-state fix)."""
+    try:
+        p.unlink()
+    except PermissionError:
+        os.chmod(p, stat.S_IWRITE)
+        p.unlink()
+
+
+def _safe_rmtree(path: Path) -> None:
+    """rmtree that never follows junctions/symlinks anywhere in the tree."""
+    if _is_reparse(path):
+        _remove_link(path)
+        return
+    for child in path.iterdir():
+        if _is_reparse(child):
+            _remove_link(child)
+        elif child.is_dir():
+            _safe_rmtree(child)
+        else:
+            _force_unlink(child)
+    try:
+        path.rmdir()
+    except PermissionError:
+        os.chmod(path, stat.S_IWRITE)
+        path.rmdir()
+
+
 def restore_bug_baseline() -> None:
     """Reset demo_workspace to the pristine (buggy) state for a fresh run.
 
     Fresh clones have no demo_workspace at all — create it (preflight does the
-    same, but this function must survive being called directly).
+    same, but this function must survive being called directly). Deletion is
+    junction-safe: a planted link inside the workspace is removed as a link,
+    its target is never touched, and the workspace root itself must not be a
+    reparse point.
     """
+    if _is_reparse(DEMO_WORKSPACE):
+        raise RuntimeError(
+            f"refusing to restore: {DEMO_WORKSPACE} is a junction/symlink "
+            "(a malicious workspace could redirect deletion outside)"
+        )
     DEMO_WORKSPACE.mkdir(parents=True, exist_ok=True)
     for item in DEMO_WORKSPACE.iterdir():
-        if item.name.startswith(".pytest_cache"):
-            shutil.rmtree(item, ignore_errors=True)
-        elif item.is_dir() and item.name == "__pycache__":
-            shutil.rmtree(item, ignore_errors=True)
+        if _is_reparse(item):
+            _remove_link(item)
         elif item.is_dir():
-            shutil.rmtree(item)
+            _safe_rmtree(item)
         else:
-            item.unlink()
+            _force_unlink(item)
     for item in PRISTINE.iterdir():
         if item.is_dir():
             shutil.copytree(item, DEMO_WORKSPACE / item.name, dirs_exist_ok=True)
@@ -118,7 +170,8 @@ async def run_agent_task(model: str, base_url: str, timeout_s: int, ev_dir: Path
             "You are a careful Python engineer. Prefer minimal, correct fixes. "
             "Use only the tools provided to you. To modify an existing file use "
             "the edit_file tool (do not invent other tool names). To execute "
-            "commands use run_command with plain 'python -m pytest tests/ -q'."
+            "commands use run_command with plain 'python -m pytest tests/ -q' "
+            "and always set its working directory (Cwd) to the workspace root."
         ),
         audit_log=audit_log,
     )
@@ -129,8 +182,9 @@ async def run_agent_task(model: str, base_url: str, timeout_s: int, ev_dir: Path
                 "base_url": base_url,
                 "workspaces": [str(DEMO_WORKSPACE)],
                 "policies": [
-                    "workspace_only(demo_workspace)",
-                    "ask_user(run_command, strict whitelist)",
+                    "file tools: allow+when path resolves inside demo_workspace",
+                    "run_command: ask_user handler, structured fail-closed allowlist "
+                    "(python -m pytest / pytest only, in-workspace Cwd required)",
                 ],
                 "preset": "lightweight",
             },
