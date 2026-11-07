@@ -28,3 +28,12 @@ and the on-stage REPLAY fallback (`python -I src/webui.py --replay <file>`).
 > matrix, offline isolation proof, RC1 audit) ships as
 > `evidence-bundle-v1.0.0.zip` attached to the
 > [v1.0.0 release](../../releases) — see its `SHA256SUMS.txt`.
+
+## Redaction note
+
+Files under `evidence/` are machine-generated on the dev machine. The
+published copy you are reading has absolute filesystem paths
+(`C:\Users\<name>\...`) replaced deterministically with `<repo>` / `<home>`
+placeholders by `scripts/publish_export.py` (the rule set is public and
+stable). Workspace SHA256 values refer to file contents, not to these text
+files, so the verification chain is unaffected.

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -80,14 +81,65 @@ EXCLUDE_PARTS = {
     ".pytest_cache",
     "demo_workspace",  # runtime state, restored from pristine
     "superpowers",  # internal process docs under docs/
+    "trending-readiness",  # T1 engineering-session records (owner-facing, dev-only)
 }
 
 # Individual files that never ship (machine-local content, personal material)
 EXCLUDE_FILES = {
     "docs/SPEAKER_CARD.md",  # talk crib sheet with local paths — personal, not public
+    # Launch copy drafts + internal maintainer scorecard: shipping them before
+    # launch would undercut the launch itself. BASELINE / ACCEPTANCE_MATRIX /
+    # SECURITY_REVIEW / REPRODUCIBILITY_REPORT / EXTERNAL_VALIDATION_PLAN do ship.
+    "docs/trending-readiness/LAUNCH_KIT.md",
+    "docs/trending-readiness/FINAL_REPORT.md",
 }
 
 COMMIT_IDENTITY = ("Antigravity-Gemma-ROCm", "release@aiwork4me")
+
+# Deterministic redaction applied to shipped TEXT files under evidence/ so
+# machine-generated artifacts (absolute paths with the dev username) can ship
+# without leaking the account. Rules are stable and public — the redacted tree
+# stays reproducible. Hand-written files are NEVER rewritten (their test
+# fixtures and examples must stay byte-exact; release_scan enforces that they
+# are clean at the source). Dev-side artifacts keep verbatim paths.
+TEXT_SUFFIXES = {
+    ".py",
+    ".md",
+    ".ps1",
+    ".sh",
+    ".txt",
+    ".ini",
+    ".patch",
+    ".json",
+    ".yml",
+    ".yaml",
+    ".toml",
+    ".log",
+}
+
+_RE_REPO_ROOT = re.compile(
+    r"[A-Za-z]:[/\\]+Users[/\\]+[A-Za-z0-9_.-]+[/\\]+Desktop[/\\]+Antigravity",
+    re.IGNORECASE,
+)
+_RE_HOME = re.compile(r"[A-Za-z]:[/\\]+Users[/\\]+[A-Za-z0-9_.-]+", re.IGNORECASE)
+_RE_UNC_HOME = re.compile(
+    r"\\\\[A-Za-z0-9_.-]+\\[A-Za-z]\$\\+Users\\+[A-Za-z0-9_.-]+", re.IGNORECASE
+)
+_RE_UNIX_HOME = re.compile(r"/home/[A-Za-z0-9_.-]+")
+
+
+def redact_text(text: str) -> tuple[str, int]:
+    """Replace absolute repo/home paths with stable placeholders.
+
+    Returns (redacted_text, replacements). Order matters: repo root first so
+    `C:\\Users\\x\\Desktop\\Antigravity` becomes `<repo>` and not `<home>\\...`.
+    UNC admin shares and Unix homes are covered too (independent review F-10/F-12).
+    """
+    text, n1 = _RE_REPO_ROOT.subn("<repo>", text)
+    text, n2 = _RE_HOME.subn("<home>", text)
+    text, n3 = _RE_UNC_HOME.subn("<unc-home>", text)
+    text, n4 = _RE_UNIX_HOME.subn("<unix-home>", text)
+    return text, n1 + n2 + n3 + n4
 
 
 def _excluded(rel: Path) -> bool:
@@ -140,10 +192,24 @@ def init_public_repo(dest: Path, files: dict[str, Path]) -> None:
     _force_rmtree(dest)
     dest.mkdir(parents=True)
 
+    redactions = 0
     for rel, src in files.items():
         target = dest / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, target)
+        # Redaction applies ONLY to machine-generated evidence: hand-written
+        # files (tests/docs/src) must be clean at the source — release_scan.py
+        # enforces that, and rewriting them here would corrupt test fixtures
+        # (found by the clean-checkout validation of the exported tree).
+        if rel.startswith("evidence/") and src.suffix in TEXT_SUFFIXES:
+            text = src.read_text(encoding="utf-8", errors="replace")
+            text, n = redact_text(text)
+            redactions += n
+            target.write_text(text, encoding="utf-8")
+        else:
+            shutil.copy2(src, target)
+    print(
+        f"[export] deterministic redaction applied: {redactions} path replacements (evidence only)"
+    )
 
     def git(*args: str) -> None:
         env = {

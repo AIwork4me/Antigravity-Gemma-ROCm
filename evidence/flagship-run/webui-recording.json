@@ -52,7 +52,7 @@
    "kind": "tool",
    "data": {
     "name": "view_file",
-    "args": "{'file_path': 'C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace\\\\stats_utils.py', 'start_line': 0, 'end_line': 799}"
+    "args": "{'file_path': '<repo>\\\\demo_workspace\\\\stats_utils.py', 'start_line': 0, 'end_line': 799}"
    },
    "t": "17:10:25",
    "ts": 1794042625.604754
@@ -62,7 +62,7 @@
    "kind": "tool",
    "data": {
     "name": "view_file",
-    "args": "{'file_path': 'C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace\\\\tests\\\\test_stats.py', 'start_line': 0, 'end_line': 799}"
+    "args": "{'file_path': '<repo>\\\\demo_workspace\\\\tests\\\\test_stats.py', 'start_line': 0, 'end_line': 799}"
    },
    "t": "17:10:27",
    "ts": 1794042627.1470242
@@ -72,7 +72,7 @@
    "kind": "tool",
    "data": {
     "name": "run_command",
-    "args": "{'command_line': 'python -m pytest tests/ -q', 'working_dir': 'C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace'}"
+    "args": "{'command_line': 'python -m pytest tests/ -q', 'working_dir': '<repo>\\\\demo_workspace'}"
    },
    "t": "17:10:37",
    "ts": 1794042637.0061138
@@ -82,7 +82,7 @@
    "kind": "tool",
    "data": {
     "name": "edit_file",
-    "args": "{'file_path': 'C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace\\\\stats_utils.py'}"
+    "args": "{'file_path': '<repo>\\\\demo_workspace\\\\stats_utils.py'}"
    },
    "t": "17:10:54",
    "ts": 1794042654.7942388
@@ -92,7 +92,7 @@
    "kind": "tool",
    "data": {
     "name": "run_command",
-    "args": "{'command_line': 'python -m pytest tests/ -q', 'working_dir': 'C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace'}"
+    "args": "{'command_line': 'python -m pytest tests/ -q', 'working_dir': '<repo>\\\\demo_workspace'}"
    },
    "t": "17:10:56",
    "ts": 1794042656.6283462
@@ -107,56 +107,56 @@
   {
    "id": 11,
    "kind": "policy",
-   "data": "run_command decision=DENY args={'CommandLine': 'ls', 'Cwd': 'C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
+   "data": "run_command decision=DENY args={'CommandLine': 'ls', 'Cwd': '<repo>\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
    "t": "17:10:58",
    "ts": 1794042658.1235073
   },
   {
    "id": 12,
    "kind": "policy",
-   "data": "run_command decision=DENY args={'CommandLine': 'dir', 'Cwd': 'C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
+   "data": "run_command decision=DENY args={'CommandLine': 'dir', 'Cwd': '<repo>\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
    "t": "17:10:58",
    "ts": 1794042658.1235142
   },
   {
    "id": 13,
    "kind": "policy",
-   "data": "run_command decision=DENY args={'CommandLine': 'python -c \"import os; print(os.listdir(\\'.\\'))\"', 'Cwd': 'C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
+   "data": "run_command decision=DENY args={'CommandLine': 'python -c \"import os; print(os.listdir(\\'.\\'))\"', 'Cwd': '<repo>\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
    "t": "17:10:58",
    "ts": 1794042658.1235187
   },
   {
    "id": 14,
    "kind": "policy",
-   "data": "run_command decision=DENY args={'CommandLine': 'powershell -Command \"Get-ChildItem\"', 'Cwd': 'C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
+   "data": "run_command decision=DENY args={'CommandLine': 'powershell -Command \"Get-ChildItem\"', 'Cwd': '<repo>\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
    "t": "17:10:58",
    "ts": 1794042658.123523
   },
   {
    "id": 15,
    "kind": "policy",
-   "data": "run_command decision=DENY args={'CommandLine': 'echo hello', 'Cwd': 'C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
+   "data": "run_command decision=DENY args={'CommandLine': 'echo hello', 'Cwd': '<repo>\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
    "t": "17:10:58",
    "ts": 1794042658.1235263
   },
   {
    "id": 16,
    "kind": "policy",
-   "data": "file_tool decision=ALLOW path='C:/Users/rocm/Desktop/Antigravity/demo_workspace/stats_utils.py'",
+   "data": "file_tool decision=ALLOW path='<repo>/demo_workspace/stats_utils.py'",
    "t": "17:10:58",
    "ts": 1794042658.1235292
   },
   {
    "id": 17,
    "kind": "policy",
-   "data": "file_tool decision=ALLOW path='C:/Users/rocm/Desktop/Antigravity/demo_workspace/tests/test_stats.py'",
+   "data": "file_tool decision=ALLOW path='<repo>/demo_workspace/tests/test_stats.py'",
    "t": "17:10:58",
    "ts": 1794042658.1235325
   },
   {
    "id": 18,
    "kind": "policy",
-   "data": "run_command decision=ALLOW args={'CommandLine': 'python -m pytest tests/ -q', 'Cwd': 'C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
+   "data": "run_command decision=ALLOW args={'CommandLine': 'python -m pytest tests/ -q', 'Cwd': '<repo>\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
    "t": "17:10:58",
    "ts": 1794042658.1235359
   },
@@ -170,7 +170,7 @@
   {
    "id": 20,
    "kind": "policy",
-   "data": "run_command decision=ALLOW args={'CommandLine': 'python -m pytest tests/ -q', 'Cwd': 'C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
+   "data": "run_command decision=ALLOW args={'CommandLine': 'python -m pytest tests/ -q', 'Cwd': '<repo>\\\\demo_workspace', 'WaitMsBeforeAsync': 1000}",
    "t": "17:10:58",
    "ts": 1794042658.1235425
   },
@@ -239,7 +239,7 @@
     "files": [
      "stats_utils.py"
     ],
-    "patch": "diff --git \"a/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace/__pycache__/stats_utils.cpython-313.pyc\" \"b/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace/__pycache__/stats_utils.cpython-313.pyc\"\nnew file mode 100644\nindex 0000000..a48a327\nBinary files /dev/null and \"b/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace/__pycache__/stats_utils.cpython-313.pyc\" differ\ndiff --git \"a/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace_pristine/stats_utils.py\" \"b/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace/stats_utils.py\"\nindex 7cde2c1..ce3ce52 100644\n--- \"a/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace_pristine/stats_utils.py\"\n+++ \"b/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace/stats_utils.py\"\n@@ -22,6 +22,4 @@ def median(values):\n     mid = n // 2\n     if n % 2 == 1:\n         return vals[mid]\n-    # BUG (planted): for even-length data the lower middle element is\n-    # returned instead of the average of the two middle elements.\n-    return vals[mid - 1]\n+    return (vals[mid - 1] + vals[mid]) / 2\ndiff --git \"a/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace/tests/__pycache__/test_stats.cpython-313-pytest-9.1.1.pyc\" \"b/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace/tests/__pycache__/test_stats.cpython-313-pytest-9.1.1.pyc\"\nnew file mode 100644\nindex 0000000..9a161bd\nBinary files /dev/null and \"b/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace/tests/__pycache__/test_stats.cpython-313-pytest-9.1.1.pyc\" differ\ndiff --git \"a/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace/tests/__pycache__/test_stats.cpython-313-pytest-9.2.0.pyc\" \"b/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace/tests/__pycache__/test_stats.cpython-313-pytest-9.2.0.pyc\"\nnew file mode 100644\nindex 0000000..fcf8ef7\nBinary files /dev/null and \"b/C:\\\\Users\\\\rocm\\\\Desktop\\\\Antigravity\\\\demo_workspace/tests/__pycache__/test_stats.cpython-313-pytest-9.2.0.pyc\" differ\n"
+    "patch": "diff --git \"a/<repo>\\\\demo_workspace/__pycache__/stats_utils.cpython-313.pyc\" \"b/<repo>\\\\demo_workspace/__pycache__/stats_utils.cpython-313.pyc\"\nnew file mode 100644\nindex 0000000..a48a327\nBinary files /dev/null and \"b/<repo>\\\\demo_workspace/__pycache__/stats_utils.cpython-313.pyc\" differ\ndiff --git \"a/<repo>\\\\demo_workspace_pristine/stats_utils.py\" \"b/<repo>\\\\demo_workspace/stats_utils.py\"\nindex 7cde2c1..ce3ce52 100644\n--- \"a/<repo>\\\\demo_workspace_pristine/stats_utils.py\"\n+++ \"b/<repo>\\\\demo_workspace/stats_utils.py\"\n@@ -22,6 +22,4 @@ def median(values):\n     mid = n // 2\n     if n % 2 == 1:\n         return vals[mid]\n-    # BUG (planted): for even-length data the lower middle element is\n-    # returned instead of the average of the two middle elements.\n-    return vals[mid - 1]\n+    return (vals[mid - 1] + vals[mid]) / 2\ndiff --git \"a/<repo>\\\\demo_workspace/tests/__pycache__/test_stats.cpython-313-pytest-9.1.1.pyc\" \"b/<repo>\\\\demo_workspace/tests/__pycache__/test_stats.cpython-313-pytest-9.1.1.pyc\"\nnew file mode 100644\nindex 0000000..9a161bd\nBinary files /dev/null and \"b/<repo>\\\\demo_workspace/tests/__pycache__/test_stats.cpython-313-pytest-9.1.1.pyc\" differ\ndiff --git \"a/<repo>\\\\demo_workspace/tests/__pycache__/test_stats.cpython-313-pytest-9.2.0.pyc\" \"b/<repo>\\\\demo_workspace/tests/__pycache__/test_stats.cpython-313-pytest-9.2.0.pyc\"\nnew file mode 100644\nindex 0000000..fcf8ef7\nBinary files /dev/null and \"b/<repo>\\\\demo_workspace/tests/__pycache__/test_stats.cpython-313-pytest-9.2.0.pyc\" differ\n"
    },
    "t": "17:11:00",
    "ts": 1794042660.3976116

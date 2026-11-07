@@ -118,7 +118,7 @@ async def agent_task(ws: Path, mission: str, ev: Path, timeout_s: int) -> dict:
     cfg = build_config(
         workspaces=[ws],
         audit_log=audit,
-        system_instructions="You are a careful Python engineer. Use only the provided tools; modify files with edit_file/create_file; run tests with run_command 'python -m pytest tests/ -q'.",
+        system_instructions="You are a careful Python engineer. Use only the provided tools; modify files with edit_file/create_file; run tests with run_command 'python -m pytest tests/ -q' and always set its working directory (Cwd) to the workspace root.",
     )
     t0 = time.time()
     async with Agent(cfg) as agent:

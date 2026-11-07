@@ -182,13 +182,15 @@ class TestShellWhitelist:
         "cmd",
         [
             "python -m pytest tests/ -q",
-            "pytest",
+            "pytest -q",
             "pytest -q tests/test_stats.py",
-            "python stats_utils.py",
+            "python -m pytest -q",
+            "pytest tests/test_stats.py::test_mean -q --tb=short",
         ],
     )
-    def test_allowed(self, cmd):
-        assert safe(cmd) is True
+    def test_allowed(self, cmd, sandbox):
+        ws, _ = sandbox
+        assert safe(cmd, cwd=str(ws), ws=ws) is True
 
     @pytest.mark.parametrize(
         "cmd",
@@ -198,16 +200,113 @@ class TestShellWhitelist:
             "whoami",
             "echo hello",
             "python -c 'print(1)'",  # arbitrary code
+            "python -c import demo_workspace",  # code eval, no metachars
             "python -m http.server 8000",  # network server
             "python -m pip install requests",  # package install
             "powershell -c Get-ChildItem",
             "curl http://x",
             "format C:",
             "shutdown /r",
+            "python stats_utils.py",  # arbitrary script (was allowed pre-T1)
+            "pytest_evil tests/",  # prefix lookalike
+            "python",  # bare interpreter
+            "python -3 -m pytest tests/",  # unknown python flag
+            "python -m pytest -m slow tests/",  # unknown pytest flag
         ],
     )
-    def test_denied(self, cmd):
-        assert safe(cmd) is False
+    def test_denied(self, cmd, sandbox):
+        ws, _ = sandbox
+        assert safe(cmd, cwd=str(ws), ws=ws) is False
+
+
+class TestStructuredSchema:
+    """Fail-closed behavior on the run_command ARGUMENT SCHEMA itself."""
+
+    def _ok_args(self, ws):
+        return {"CommandLine": "pytest -q", "Cwd": str(ws), "WaitMsBeforeAsync": 1000}
+
+    def test_unknown_key_denied(self, sandbox):
+        ws, _ = sandbox
+        args = self._ok_args(ws) | {"Script": "evil.py"}
+        assert command_is_safe(args, _workspace_norms([ws])) is False
+
+    def test_ambiguous_command_keys_denied(self, sandbox):
+        ws, _ = sandbox
+        args = self._ok_args(ws) | {"command": "pytest -q"}
+        assert command_is_safe(args, _workspace_norms([ws])) is False
+
+    def test_missing_command_key_denied(self, sandbox):
+        ws, _ = sandbox
+        assert command_is_safe({"Cwd": str(ws)}, _workspace_norms([ws])) is False
+
+    def test_cwd_alias_accepted(self, sandbox):
+        ws, _ = sandbox
+        args = {"CommandLine": "pytest -q", "WorkingDirectory": str(ws)}
+        assert command_is_safe(args, _workspace_norms([ws])) is True
+
+    def test_cwd_required(self, sandbox):
+        ws, _ = sandbox
+        assert command_is_safe({"CommandLine": "pytest -q"}, _workspace_norms([ws])) is False
+
+    @pytest.mark.parametrize("wait", ["1000", -1, 10**9, True])
+    def test_bad_wait_ms_denied(self, sandbox, wait):
+        ws, _ = sandbox
+        args = self._ok_args(ws) | {"WaitMsBeforeAsync": wait}
+        assert command_is_safe(args, _workspace_norms([ws])) is False
+
+    @pytest.mark.parametrize("wait", [float("nan"), float("inf"), float("-inf")])
+    def test_nonfinite_wait_ms_denied(self, sandbox, wait):
+        """NaN slips past plain range comparisons (review F-2)."""
+        ws, _ = sandbox
+        args = self._ok_args(ws) | {"WaitMsBeforeAsync": wait}
+        assert command_is_safe(args, _workspace_norms([ws])) is False
+
+    def test_non_dict_args_denied(self, sandbox):
+        ws, _ = sandbox
+        assert command_is_safe("pytest -q", _workspace_norms([ws])) is False
+
+
+class TestTokenizationTricks:
+    def test_unterminated_quote_denied(self, sandbox):
+        ws, _ = sandbox
+        assert safe('python -m pytest tests/ -q"', cwd=str(ws), ws=ws) is False
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            'python -m "pytest" tests/ -q',
+            "py' th'on -m pytest tests/",
+            'py"th"on -m pytest tests/ -q',  # dequoted argv[0] aliasing (review F-3)
+            'py"te"st -q',
+        ],
+    )
+    def test_any_quoting_denied(self, sandbox, cmd):
+        """The enumerated commands never need quotes — any quote rejects."""
+        ws, _ = sandbox
+        assert safe(cmd, cwd=str(ws), ws=ws) is False
+
+    def test_unicode_homoglyph_denied(self, sandbox):
+        ws, _ = sandbox
+        assert safe("python -m pytest tests\u2215 -q", cwd=str(ws), ws=ws) is False
+
+    def test_absolute_test_path_outside_denied(self, sandbox):
+        ws, outside = sandbox
+        assert safe(f"python -m pytest {outside}", cwd=str(ws), ws=ws) is False
+
+    def test_absolute_test_path_inside_allowed(self, sandbox):
+        ws, _ = sandbox
+        assert safe(f"python -m pytest {ws}\\tests", cwd=str(ws), ws=ws) is True
+
+    def test_py_alias_requires_3(self, sandbox):
+        ws, _ = sandbox
+        assert safe("py -3 -m pytest tests/ -q", cwd=str(ws), ws=ws) is True
+        assert safe("py -3.12 -m pytest tests/", cwd=str(ws), ws=ws) is False
+        assert safe("py -m pytest tests/", cwd=str(ws), ws=ws) is False
+
+    def test_exe_absolute_path_denied(self, sandbox, tmp_path):
+        ws, _ = sandbox
+        fake = (tmp_path / "python.exe").as_posix()
+        assert safe(f"{fake} -m pytest tests/ -q", cwd=str(ws), ws=ws) is False
 
 
 class TestShellMetacharInjection:

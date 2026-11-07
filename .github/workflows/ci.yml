@@ -11,6 +11,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # CI-tested versions. The SDK metadata allows >=3.10, but only these
+        # two legs are actually exercised — README claims exactly this set.
         python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
@@ -32,3 +34,11 @@ jobs:
 
       - name: Tests (unit + security red-team, live excluded)
         run: pytest -q
+
+      - name: Publication-surface scan (private info, enforce)
+        run: python scripts/release_scan.py --enforce
+
+      - name: Dependency vulnerability audit (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit --skip-editable

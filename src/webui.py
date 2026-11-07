@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import copy
 import json
+import math
 import re
 import subprocess
 import sys
@@ -50,7 +51,6 @@ OLLAMA = Path.home() / "AppData/Local/Programs/Ollama/ollama.exe"
 # ---------------------------------------------------------------- run state
 _lock = threading.Lock()
 _events: deque = deque(maxlen=4000)
-_cond = threading.Condition()
 _state = {"running": False, "replay": False, "run_id": None, "started_at": None}
 _seq = {"n": 0}
 
@@ -63,18 +63,22 @@ _recorder_path: Path | None = None
 def set_recorder(path: Path | None) -> None:
     """Arm/disarm event recording; the LAST completed run wins (file is rewritten)."""
     global _recorder, _recorder_path
-    if path is None:
-        _recorder = None
-        _recorder_path = None
-    else:
-        _recorder = []
-        _recorder_path = Path(path)
+    with _lock:
+        if path is None:
+            _recorder = None
+            _recorder_path = None
+        else:
+            _recorder = []
+            _recorder_path = Path(path)
 
 
 def dump_recording() -> Path | None:
     """Write the recorded event stream to disk (no-op when not recording)."""
     if _recorder is None or _recorder_path is None:
         return None
+    with _lock:
+        events = list(_recorder)
+        _recorder.clear()
     payload = {
         "format": 1,
         "meta": {
@@ -82,25 +86,84 @@ def dump_recording() -> Path | None:
             "recorded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "model": DEFAULT_MODEL,
         },
-        "events": list(_recorder),
+        "events": events,
     }
     _recorder_path.parent.mkdir(parents=True, exist_ok=True)
     _recorder_path.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
     return _recorder_path
 
 
+# Replay input bounds: a recording is a local, trusted artifact, but the
+# loader still caps size/shape so a corrupted or hostile file cannot stall
+# the dashboard or push unbounded data into the DOM.
+_MAX_REPLAY_BYTES = 32 * 1024 * 1024
+_MAX_REPLAY_EVENTS = 20_000
+_MAX_EVENT_CHARS = 65_536
+_REPLAY_KINDS = frozenset(
+    {
+        "stage",
+        "tool",
+        "policy",
+        "token",
+        "pytest",
+        "diff",
+        "done",
+        "error",
+        "meta",
+        "replay",
+        "replay_done",
+        "ping",
+    }
+)
+
+
+def _check_replay_event(ev) -> None:
+    if not isinstance(ev, dict):
+        raise ValueError("replay event must be an object")
+    if ev.get("kind") not in _REPLAY_KINDS:
+        raise ValueError(f"unknown replay event kind: {ev.get('kind')!r}")
+    if len(json.dumps(ev, ensure_ascii=False, default=str)) > _MAX_EVENT_CHARS:
+        raise ValueError("replay event too large")
+    ts = ev.get("ts")
+    if ts is not None and (
+        isinstance(ts, bool) or not isinstance(ts, int | float) or not math.isfinite(ts)
+    ):
+        raise ValueError("replay event ts must be a finite number")  # NaN killed pacing (F-7)
+    t = ev.get("t")
+    if t is not None and (not isinstance(t, str) or len(t) > 32):
+        raise ValueError("replay event t must be a short string")
+
+
 def load_replay(path: Path) -> dict:
     """Load and validate a recording; ValueError with a one-line message on bad input."""
+    p = Path(path)
     try:
-        rec = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
-        raise ValueError(f"cannot read replay file {path}: {e}") from e
+        if p.stat().st_size > _MAX_REPLAY_BYTES:
+            raise ValueError(
+                f"replay file too large ({p.stat().st_size} bytes > {_MAX_REPLAY_BYTES})"
+            )
+        rec = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, RecursionError) as e:
+        # RecursionError: pathologically nested JSON must surface as a
+        # one-line error, not a traceback (independent review F-6)
+        raise ValueError(f"cannot read replay file {path}: {type(e).__name__}: {e}") from e
     if (
         not isinstance(rec, dict)
         or rec.get("format") != 1
         or not isinstance(rec.get("events"), list)
     ):
         raise ValueError(f"unsupported replay file {path}: expected format 1 with an events list")
+    if len(rec["events"]) > _MAX_REPLAY_EVENTS:
+        raise ValueError(
+            f"replay file has too many events ({len(rec['events'])} > {_MAX_REPLAY_EVENTS})"
+        )
+    if not isinstance(rec.get("meta", {}), dict):
+        raise ValueError("replay meta must be an object")
+    try:
+        for ev in rec["events"]:
+            _check_replay_event(ev)
+    except ValueError as e:
+        raise ValueError(f"{path}: {e}") from e
     return rec
 
 
@@ -116,8 +179,8 @@ def run_allowed() -> tuple[bool, str]:
 
 def _append_replay_event(ev: dict) -> None:
     """Feed a recorded event into the live SSE stream (fresh id, original kind/data/t)."""
-    _seq["n"] += 1
-    with _cond:
+    with _lock:
+        _seq["n"] += 1
         _events.append(
             {
                 "id": _seq["n"],
@@ -126,7 +189,14 @@ def _append_replay_event(ev: dict) -> None:
                 "t": ev.get("t", "--:--:--"),
             }
         )
-        _cond.notify_all()
+
+
+def clamp_speed(speed: float) -> float:
+    """Bound replay pacing to a sane range (CLI flags are advisory only)."""
+    try:
+        return min(max(float(speed), 0.1), 100.0)
+    except (TypeError, ValueError):
+        return 1.0
 
 
 def start_replay(recording: dict, speed: float = 1.0) -> bool:
@@ -144,17 +214,22 @@ def start_replay(recording: dict, speed: float = 1.0) -> bool:
         _state.update(running=True, replay=True, run_id=meta.get("run_id"))
 
     emit("replay", {"run_id": meta.get("run_id"), "recorded_at": meta.get("recorded_at")})
+    pace = clamp_speed(speed)
 
     def feeder() -> None:
         try:
             prev_ts = None
             for ev in events:
                 ts = ev.get("ts")
-                if isinstance(ts, int | float) and prev_ts is not None:
-                    time.sleep(min(max(ts - prev_ts, 0.0) / max(speed, 0.01), 2.0))
+                if isinstance(ts, int | float) and not isinstance(ts, bool) and prev_ts is not None:
+                    delay = min(max(ts - prev_ts, 0.0) / pace, 2.0)
+                    if math.isfinite(delay):  # defensive: never sleep(NaN)
+                        time.sleep(delay)
                 prev_ts = ts
                 _append_replay_event(ev)
             emit("replay_done", {"run_id": meta.get("run_id")})
+        except Exception as e:  # a hostile file must not kill the thread silently
+            emit("error", {"message": f"replay aborted: {type(e).__name__}: {e}"})
         finally:
             with _lock:
                 _state["running"] = False
@@ -165,13 +240,12 @@ def start_replay(recording: dict, speed: float = 1.0) -> bool:
 
 def emit(kind: str, data) -> None:
     ts = time.time()
-    _seq["n"] += 1
-    ev = {"id": _seq["n"], "kind": kind, "data": data, "t": time.strftime("%H:%M:%S")}
-    with _cond:
+    with _lock:
+        _seq["n"] += 1
+        ev = {"id": _seq["n"], "kind": kind, "data": data, "t": time.strftime("%H:%M:%S")}
         _events.append(ev)
-        _cond.notify_all()
-    if _recorder is not None:
-        _recorder.append({**ev, "data": copy.deepcopy(data), "ts": ts})
+        if _recorder is not None:
+            _recorder.append({**ev, "data": copy.deepcopy(data), "ts": ts})
 
 
 # ---------------------------------------------------------------- the task
@@ -206,7 +280,8 @@ def run_demo_task(run_id: str) -> None:
                 system_instructions=(
                     "You are a careful Python engineer. Prefer minimal, correct fixes. "
                     "Use only the provided tools; modify files with edit_file; "
-                    "run tests with run_command 'python -m pytest tests/ -q'."
+                    "run tests with run_command 'python -m pytest tests/ -q' and "
+                    "always set its working directory (Cwd) to the workspace root."
                 ),
             )
             seen_audit = 0
@@ -284,9 +359,7 @@ def run_demo_task(run_id: str) -> None:
     except Exception as e:
         emit("error", {"message": f"{type(e).__name__}: {e}"})
     finally:
-        dump_recording()  # write the full stream, then reset for the next run
-        if _recorder is not None:
-            _recorder.clear()
+        dump_recording()  # writes the full stream and resets for the next run
 
 
 def start_run() -> bool:
@@ -312,8 +385,60 @@ def start_run() -> bool:
 
 
 # ---------------------------------------------------------------- endpoints
+# Browser-origin gate for the one state-changing endpoint (POST /api/run).
+# The dashboard binds 127.0.0.1 only, so requests must be loopback-sourced:
+# a cross-origin page must not be able to drive-by-start agent runs (classic
+# CSRF against loopback services). curl/pytest send no Origin — allowed.
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def _host_of(netloc: str) -> str:
+    """Hostname of a Host/Origin netloc, port stripped (IPv6-aware)."""
+    netloc = netloc.strip().lower()
+    if netloc.startswith("["):  # [::1]:8420
+        return netloc[1 : netloc.index("]")] if "]" in netloc else netloc[1:]
+    return netloc.split(":")[0]
+
+
+def origin_allowed(headers) -> tuple[bool, str]:
+    """Validate Host + Origin + Sec-Fetch-Site for the run endpoint.
+
+    Origin (when present) must match the Host netloc EXACTLY — same host AND
+    same port. Loopback-on-a-different-port (another local dev server) is a
+    different origin and is rejected (independent review F-1).
+    """
+    host_netloc = (headers.get("host") or "").strip().lower()
+    host = _host_of(host_netloc)
+    if host not in _LOOPBACK_HOSTS:
+        return False, f"non-loopback host {host!r}"
+    origin = headers.get("origin")
+    if origin:
+        o = origin.strip().lower()
+        if "://" not in o:
+            return False, "malformed origin"
+        scheme, rest = o.split("://", 1)
+        if scheme not in ("http", "https"):
+            return False, f"bad origin scheme {scheme!r}"
+        if _host_of(rest) not in _LOOPBACK_HOSTS:
+            return False, f"cross-origin host {origin!r}"
+        if rest != host_netloc:
+            return False, f"cross-origin netloc {origin!r} != host {host_netloc!r}"
+    site = headers.get("sec-fetch-site")
+    if site and site not in ("same-origin", "same-site", "none"):
+        return False, f"sec-fetch-site={site!r}"
+    return True, ""
+
+
 async def homepage(request: Request) -> Response:
-    return Response(PAGE, media_type="text/html; charset=utf-8")
+    return Response(
+        PAGE,
+        media_type="text/html; charset=utf-8",
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+            "Referrer-Policy": "no-referrer",
+        },
+    )
 
 
 async def api_status(request: Request) -> JSONResponse:
@@ -369,12 +494,18 @@ async def api_status(request: Request) -> JSONResponse:
 
 
 async def api_run(request: Request):
-    ok, msg = run_allowed()
+    ok, why = origin_allowed(request.headers)
     if not ok:
-        return JSONResponse({"error": msg}, status_code=409)
-    if not start_run():
+        return JSONResponse({"error": f"forbidden: {why}"}, status_code=403)
+    if not start_run():  # atomic check+start under _lock
         return JSONResponse({"error": "a run is already in progress"}, status_code=409)
     return JSONResponse({"started": True, "run_id": _state["run_id"]})
+
+
+def _snapshot_after(last_id: int) -> list[dict]:
+    """Copy of events newer than last_id. Never blocks the caller's event loop."""
+    with _lock:
+        return [e for e in _events if e["id"] > last_id]
 
 
 async def api_stream(request: Request):
@@ -385,14 +516,15 @@ async def api_stream(request: Request):
         while True:
             if await request.is_disconnected():
                 return
-            with _cond:
-                _cond.wait(timeout=0.5)
-                batch = [e for e in _events if e["id"] > last_id]
-            for e in batch:
-                last_id = e["id"]
-                yield {"event": e["kind"], "data": json.dumps(e["data"], ensure_ascii=False)}
-            if not batch:
+            batch = _snapshot_after(last_id)
+            if batch:
+                for e in batch:
+                    last_id = e["id"]
+                    yield {"event": e["kind"], "data": json.dumps(e["data"], ensure_ascii=False)}
+                await asyncio.sleep(0.05)
+            else:
                 yield {"event": "ping", "data": ""}
+                await asyncio.sleep(0.5)
 
     return EventSourceResponse(gen())
 
@@ -447,20 +579,24 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:14px}
 const ICON={view_file:'👁',create_file:'📝',edit_file:'✏️',run_command:'⚙️',list_directory:'📁',find_file:'🔍'};
 let es=null,running=false;
 async function refresh(){try{const s=await (await fetch('/api/status')).json();
- const c=(ok,label,val)=>`<div class="chip ${ok?'ok':'bad'}">${label}：<b>${val}</b></div>`;
- document.getElementById('chips').innerHTML=
-  c(s.server,'Ollama',s.server||'离线')+
-  c(s.model_listed,'模型',s.model_listed?(s.model||'gemma4:26b'):'缺失')+
-  c(s.model_resident,'GPU 驻留',s.model_resident?'是':'否(冷加载~70s)')+
-  c(s.backend!=='unknown','后端',s.backend)+
-  c(s.workspace_at_baseline,'Bug 基线',s.workspace_at_baseline?'就绪':'漂移(将自动重置)');
+ const chips=document.getElementById('chips');chips.textContent='';
+ const c=(ok,label,val)=>{const d=document.createElement('div');d.className='chip '+(ok?'ok':'bad');
+  d.appendChild(document.createTextNode(label+'：'));const b=document.createElement('b');
+  b.textContent=val;d.appendChild(b);chips.appendChild(d);};
+ c(s.server,'Ollama',s.server||'离线');
+ c(s.model_listed,'模型',s.model_listed?(s.model||'gemma4:26b'):'缺失');
+ c(s.model_resident,'GPU 驻留',s.model_resident?'是':'否(冷加载~70s)');
+ c(s.backend!=='unknown','后端',s.backend);
+ c(s.workspace_at_baseline,'Bug 基线',s.workspace_at_baseline?'就绪':'漂移(将自动重置)');
  if(!running){document.getElementById('runbtn').disabled=!(s.server&&s.model_listed)||s.replay;}}catch(e){}}
-function addEv(html,cls){const f=document.getElementById('feed');
- const d=document.createElement('div');d.className='ev '+(cls||'');d.innerHTML=html;
- f.appendChild(d);f.scrollTop=f.scrollHeight;}
 function addEvEl(el,cls){const f=document.getElementById('feed');
  const d=document.createElement('div');d.className='ev '+(cls||'');d.appendChild(el);
  f.appendChild(d);f.scrollTop=f.scrollHeight;}
+function addEvRow(parts,cls){const row=document.createElement('span');
+ parts.forEach(p=>{if(typeof p==='string'){row.appendChild(document.createTextNode(p));}
+  else{const b=document.createElement('b');if(p.cls)b.className=p.cls;b.textContent=p.b;row.appendChild(b);}});
+ addEvEl(row,cls);}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function tsSpan(){const s=document.createElement('span');s.className='t';s.textContent=new Date().toLocaleTimeString();return s;}
 function connect(){es=new EventSource('/api/stream');
  es.addEventListener('replay',e=>{const d=JSON.parse(e.data);
@@ -489,14 +625,17 @@ function connect(){es=new EventSource('/api/stream');
   el.innerHTML=d.exit===0?'<span class="badge green">✓ PASS</span>':'<span class="badge red">✗ FAIL</span>'+(d.phase==='before'?' 修复前（bug 存在，符合预期）':' 修复后');});
  es.addEventListener('diff',e=>{const d=JSON.parse(e.data);
   document.getElementById('diff').innerHTML=d.patch.split('\\n').map(l=>
-   l.startsWith('+')?`<span class="b">${l.replace(/</g,'&lt;')}</span>`:
-   l.startsWith('-')?`<span class="a">${l.replace(/</g,'&lt;')}</span>`:
-   l.replace(/</g,'&lt;')).join('\\n');});
+   l.startsWith('+')?`<span class="b">${esc(l)}</span>`:
+   l.startsWith('-')?`<span class="a">${esc(l)}</span>`:
+   esc(l)).join('\\n');});
  es.addEventListener('done',e=>{const d=JSON.parse(e.data);running=false;
   if(document.getElementById('replaybanner').style.display!=='block')
    document.getElementById('runbtn').disabled=false;
-  addEv(`<span class="t">${new Date().toLocaleTimeString()}</span>${d.ok?'✅ <b>演示成功</b> — bug 已修复，独立验证全绿':'⚠️ <b>未完成</b>'} 变更文件：${d.files_changed.join(', ')||'(无)'}`,'stage');});
- es.addEventListener('error',e=>{});}
+  addEvRow([d.ok?{b:'✅ 演示成功',cls:''}:{b:'⚠️ 未完成',cls:''},
+   d.ok?' — bug 已修复，独立验证全绿':'',
+   ' 变更文件：'+((d.files_changed||[]).join(', ')||'(无)')],'stage');});
+ es.addEventListener('error',e=>{ if(!e.data)return; // transport errors carry no data
+  try{const d=JSON.parse(e.data);addEvRow(['⚠️ '+(d.message||'run error')],'stage');}catch(_){}});}
 async function doRun(){if(running)return;running=true;
  document.getElementById('feed').innerHTML='';document.getElementById('tokens').textContent='';
  document.getElementById('diff').textContent='（运行中…）';

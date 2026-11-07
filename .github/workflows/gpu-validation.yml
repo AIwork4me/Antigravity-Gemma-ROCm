@@ -1,0 +1,44 @@
+name: GPU physical validation (opt-in)
+
+# NEVER runs automatically. Physical hardware gate: dispatch manually on a
+# self-hosted Windows runner that has Ollama + an AMD GPU (ROCm) and the
+# reference model pulled. Produces honest PASS/FAIL/BLOCKED evidence —
+# a CPU CI runner must never produce a GPU "PASS".
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Ollama model tag (default gemma4:26b)"
+        required: false
+        default: gemma4:26b
+      with-agent:
+        description: "Run the live agent demo (red->green)"
+        required: false
+        default: "true"
+
+jobs:
+  gpu-validate:
+    runs-on: [self-hosted, Windows, ROCm]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up venv
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+
+      - name: Physical GPU validation
+        env:
+          AGENT_MODEL: ${{ github.event.inputs.model }}
+        run: >
+          .\.venv\Scripts\python.exe scripts\gpu_validate.py
+          --model ${{ github.event.inputs.model }}
+          ${{ github.event.inputs.with-agent == 'true' && '--with-agent' || '--no-agent' }}
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-validation-${{ github.run_id }}
+          path: artifacts/gpu-validation/
+          if-no-files-found: ignore

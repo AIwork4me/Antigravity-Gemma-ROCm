@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/AIwork4me/Antigravity-Gemma-ROCm/actions/workflows/ci.yml/badge.svg)](https://github.com/AIwork4me/Antigravity-Gemma-ROCm/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](requirements.txt)
+[![Python 3.12–3.13](https://img.shields.io/badge/python-3.12%20%E2%80%93%203.13-blue.svg)](requirements.txt)
 [![code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](ruff.toml)
 
 [English README](README.md)
@@ -54,6 +54,7 @@ winget install --id Ollama.Ollama -e --accept-source-agreements --accept-package
 ollama pull gemma4:26b
 
 # 3) 项目依赖（独立 venv —— 不触碰你的基础 Python）
+#    Python 3.12-3.13 为 CI 实测版本（SDK 最低要求 3.10）
 git clone https://github.com/AIwork4me/Antigravity-Gemma-ROCm.git
 cd Antigravity-Gemma-ROCm
 python -m venv .venv
@@ -107,7 +108,7 @@ pytest 红转绿、最终 diff。REPLAY 模式带回放横幅重演录制的事�
 │  google-antigravity SDK 0.1.23 ── harness: bin/localharness.exe   │
 │      ├─ 工具: view_file / create_file / edit_file / run_command   │
 │      ├─ B1 文件边界 : 路径必须解析进工作区                          │
-│      ├─ B2 shell 边界: pytest/python 白名单，禁元字符               │
+│      ├─ B2 shell 边界: 结构化仅限 pytest + 工作区 Cwd               │
 │      └─ OpenAI 兼容 HTTP ──► Ollama @ 127.0.0.1:11434             │
 │                                       └─ rocm_v7_1 runner         │
 │                                            └─► Radeon 8060S       │
@@ -157,13 +158,17 @@ ASUS ProArt PX13 —— Ryzen AI MAX+ 395（16C/32T）、Radeon 8060S（gfx1151�
 
 ## 安全边界（诚实版）
 
-- **两道独立边界**守护 agent：文件路径授权（感知 reparse point 的工作区路径解析）
-  与 shell 进程许可（严格的 pytest/python 白名单；出现任何 shell 元字符即拒绝）。
-  红队测试套件：`tests/test_security_boundaries.py`（junction 逃逸、`..` 穿越、
-  `\\?\` 路径、元字符注入、Cwd 重定向……）。
-- SDK 的 shell 子进程在 Windows 上**没有 OS 级沙箱**——我们不假装有。缓解措施：
-  白名单 + 审计日志 + 可选的低权限账户运行、或为 `run_command` 接入
-  ask-a-human 处理器（`policy.ask_user`）。
+- **三道策略边界**守护 agent：文件路径授权（感知 reparse point 的工作区路径解析）；
+  shell 进程许可（对可执行文件 + 参数 + 工作区内 `Cwd` 做结构化 fail-closed 校验——
+  仅放行 `python -m pytest` / `pytest` 形态；未知参数结构、任意脚本、`-c` 代码执行、
+  任何 shell 元字符一律拒绝）；以及仅回环绑定的 Web 控制台（Host/Origin/CSRF 校验、
+  非阻塞 SSE、回放文件大小与结构校验）。红队套件：`tests/test_security_boundaries.py`
+  （junction 逃逸、`..` 穿越、`\?\` 路径、元字符注入、Cwd 重定向、前缀撞名……）
+  与 `tests/test_webui_http.py`（跨源触发运行、DNS rebinding、回放边界）。
+- SDK 的 shell 子进程在 Windows 上**没有 OS 级沙箱**，pytest 白名单也不等于沙箱——
+  pytest 会执行工作区里的任何测试代码。请把演示限制在一次性 demo 工作区内；对任意
+  导入的仓库请用 `build_config(enable_shell=False)` 或人工审批 + 低权限账户。详见
+  [SECURITY.md](SECURITY.md)。
 - 物理断网需要手动操作；软件级隔离证明与手动流程见
   [docs/OFFLINE_VALIDATION.md](docs/OFFLINE_VALIDATION.md)。
 
