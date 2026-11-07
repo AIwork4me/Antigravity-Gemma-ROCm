@@ -1,0 +1,31 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Models & credentials (never commit)
+*.litertlm
+*.gguf
+*.bin
+*.safetensors
+**/.ollama/
+.env
+*apikey*
+*credential*
+
+# Large / generated artifacts: runtime evidence lives in evidence/ (curated)
+# and in the Release bundle zip; raw artifacts/ stay local-only
+artifacts/
+dist/
+build/
+*.zip
+*.exe
+
+# OS junk
+Thumbs.db
+.DS_Store
+
+# Demo workspace runtime state (regenerated from pristine/ by preflight/demo)
+demo_workspace/
+scenarios/*/run/

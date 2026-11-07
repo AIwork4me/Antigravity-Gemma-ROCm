@@ -1,0 +1,3 @@
+app.conf: reading setting 'port' ...
+app.conf raw value: port=8080
+FATAL: settings loader crashed; service startup aborted.

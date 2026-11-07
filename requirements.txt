@@ -1,0 +1,5 @@
+# Runtime dependencies (reference-machine pins in requirements.lock.txt)
+google-antigravity==0.1.23
+starlette==1.10.0
+sse-starlette==3.6.0
+uvicorn==0.54.0

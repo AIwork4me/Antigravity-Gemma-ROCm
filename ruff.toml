@@ -1,0 +1,21 @@
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+    "scenarios",           # agent task fixtures: their bytes are hashed evidence
+    "demo_workspace",      # runtime state, regenerated from pristine
+    "demo_workspace_pristine",
+    "artifacts",
+    "build",
+    "dist",
+    "docs",                # handwritten docs: keep python snippets author-stable
+    ".superpowers",
+]
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501", # line length handled by formatter
+]
+
+[format]
+quote-style = "double"

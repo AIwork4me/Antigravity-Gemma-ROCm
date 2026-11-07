@@ -1,0 +1,6 @@
+# Development dependencies: everything needed to develop, lint, test,
+# and generate README assets. CI installs only this file.
+-r requirements.txt
+pytest==9.2.0
+ruff==0.17.4
+Pillow>=10.1
