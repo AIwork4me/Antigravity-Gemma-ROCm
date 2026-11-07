@@ -74,8 +74,31 @@ TEXT_SUFFIXES = {
     ".yaml",
     ".toml",
     ".log",
+    ".xml",  # dxdiag & friends carry MachineName/serial-shaped strings (review R1 F-1)
 }
 TEXT_NAMES = {".gitignore", ".gitattributes"}
+# Binary types that may appear in evidence archives without being scannable
+# text. Anything OUTSIDE both sets is an `opaque_member` finding (R2 N-2):
+# an unknown suffix is unscannable and unredactable, so it fails closed.
+KNOWN_BINARY_SUFFIXES = {
+    ".png",
+    ".gif",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".bmp",
+    ".ico",
+    ".pdf",
+    ".zip",
+    ".gz",
+    ".exe",
+    ".dll",
+    ".bin",
+    ".pyc",
+    ".sqlite",
+    ".db",
+    ".mp4",
+}
 SKIP_PARTS = {"__pycache__", ".pytest_cache", ".ruff_cache", "node_modules"}
 ZIP_MEMBER_LIMIT = 2000
 ZIP_MEMBER_BYTES = 2 * 1024 * 1024
@@ -89,6 +112,11 @@ PATTERNS: dict[str, re.Pattern[str]] = {
     "machine_model": re.compile(r"ProArt|PX13", re.IGNORECASE),
     # machine serial-like identifiers — NEVER allowed anywhere
     "machine_serial": re.compile(r"HN\d{4,}", re.IGNORECASE),
+    # Windows auto-generated hostnames (prefix + 6-15 alphanumerics) —
+    # machine identity, not project content (review R1 F-1: leaked via
+    # dxdiag.xml MachineName); case-insensitive so a lowercase dump cannot
+    # evade it (review R2 N-5)
+    "windows_hostname": re.compile(r"\bDESKTOP-[A-Z0-9]{6,15}\b", re.IGNORECASE),
     # secret-looking assignments (key/token/password = <long literal>)
     "secret_like": re.compile(
         r"(api[_-]?key|token|password|passwd|secret)\s*[=:]\s*['\"]?[A-Za-z0-9_\-]{16,}",
@@ -133,6 +161,7 @@ ALLOW_RULES: list[dict] = [
     {"kind": "abs_unix_user_path", "path_glob": "tests/test_release_scan.py"},
     {"kind": "machine_model", "path_glob": "tests/test_release_scan.py"},
     {"kind": "machine_serial", "path_glob": "tests/test_release_scan.py"},
+    {"kind": "windows_hostname", "path_glob": "tests/test_release_scan.py"},
     {"kind": "secret_like", "path_glob": "tests/test_release_scan.py"},
     {"kind": "token_prefix", "path_glob": "tests/test_release_scan.py"},
     {"kind": "unc_user_path", "path_glob": "tests/test_release_scan.py"},
@@ -253,6 +282,20 @@ def scan_zip(zip_path: Path) -> tuple[int, list[dict]]:
             info = zf.getinfo(n)
             suffix = Path(n).suffix
             if suffix not in TEXT_SUFFIXES:
+                if suffix not in KNOWN_BINARY_SUFFIXES:
+                    # a suffix we neither scan nor recognize would ship
+                    # unredacted AND unflagged — fail closed instead
+                    # (review R2 N-2)
+                    findings.append(
+                        {
+                            "file": n,
+                            "line": 0,
+                            "kind": "opaque_member",
+                            "snippet": f"{zip_path.name}: unrecognized suffix {suffix or '(none)'} "
+                            "is not scannable text nor a known binary type",
+                            "root": zip_path.name,
+                        }
+                    )
                 continue
             if info.file_size > ZIP_MEMBER_BYTES:
                 findings.append(

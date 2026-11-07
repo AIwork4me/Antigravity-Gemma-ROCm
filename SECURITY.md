@@ -49,6 +49,28 @@ workspace as trusted input, or set
 `NoDefaultCurrentDirectoryInExePath` / run from a non-writable Cwd for
 defense in depth.
 
+## More limits stated precisely
+
+- **Loopback is not authentication.** The dashboard binds `127.0.0.1` and
+  checks Host/Origin headers — that stops *cross-origin browsers*, not other
+  local processes. Any code running as the same (or higher-privileged) user
+  on the machine can reach a loopback port; there is no per-request identity.
+- **TOCTOU:** every file/path check is a check-then-use pair. A concurrent
+  local process can swap a verified path (junction, rename) between check and
+  use. The boundary layer narrows this window and the red-team tests pin the
+  resolution rules, but a same-machine adversary with timing control is
+  outside the threat model.
+- **Evidence sidecars are integrity checks, not signatures.** The SHA256
+  sidecars/manifests shipped with releases let you verify that the bytes you
+  downloaded are the bytes we hashed. They are **not** digital signatures:
+  they bind no identity and provide no non-repudiation.
+- **The physical GPU validation is strong process-level evidence, not an
+  unforgeable hardware proof.** `scripts/gpu_validate.py` ties a PASS to a
+  live inference probe, an owned server's log, PPID-attributed runner DLLs
+  and a sealed evidence directory — but a sufficiently privileged local
+  adversary could still fake parts of the chain. It is also not an OS
+  sandbox. Trust boundary: [docs/GPU_BACKEND_VALIDATION.md](docs/GPU_BACKEND_VALIDATION.md).
+
 ## Scope
 
 - ✅ In scope: the policy predicates, workspace resolution, web dashboard

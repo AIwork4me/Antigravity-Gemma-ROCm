@@ -41,6 +41,18 @@ def test_scan_text_detects_machine_serial():
     assert any(f["kind"] == "machine_serial" for f in findings)
 
 
+def test_scan_text_detects_windows_hostname():
+    """R1 F-1 / R2 N-5: DESKTOP- hostnames are machine identity, in any case."""
+    for text in ("host DESKTOP-IF0424E here", "host desktop-ab12cd here"):
+        findings = rs.scan_text(text, "evidence/dump.xml")
+        assert any(f["kind"] == "windows_hostname" for f in findings), text
+
+
+def test_scan_text_english_desktop_word_not_hostname():
+    """'the desktop app' must not trip the hostname pattern (IGNORECASE)."""
+    assert rs.scan_text("the Antigravity IDE/desktop app is Google's\n", "docs/x.md") == []
+
+
 def test_scan_text_detects_fine_grained_pat():
     findings = rs.scan_text("token github_pat_11ABCDEFG0123456789", "notes.md")
     assert any(f["kind"] == "token_prefix" for f in findings)
@@ -126,6 +138,29 @@ def test_scan_zip_members(tmp_path):
     files, findings = rs.scan_zip(z)
     assert files == 1
     assert any(f["kind"] == "abs_win_user_path" for f in findings)
+
+
+def test_scan_zip_xml_members_are_text(tmp_path):
+    """R1 F-1: .xml is scannable text — a MachineName inside ships no more."""
+    z = tmp_path / "bundle.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.writestr("hw/dump.xml", "<MachineName>DESKTOP-IF0424E</MachineName>")
+    files, findings = rs.scan_zip(z)
+    assert files == 1
+    kinds = {f["kind"] for f in findings}
+    assert "windows_hostname" in kinds
+
+
+def test_scan_zip_opaque_suffix_fails_closed(tmp_path):
+    """R2 N-2: an unrecognized suffix is neither scannable nor redactable —
+    it must be a finding, never silently invisible."""
+    z = tmp_path / "bundle.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.writestr("evil/config.cfg", "hostname=desktop-if0424e")
+        zf.writestr("ok/pic.png", b"\x89PNG fake")
+    _, findings = rs.scan_zip(z)
+    assert any(f["kind"] == "opaque_member" and f["file"] == "evil/config.cfg" for f in findings)
+    assert not any(f["file"] == "ok/pic.png" for f in findings)  # known binary: fine
 
 
 # ------------------------------------------------------------- enforcement

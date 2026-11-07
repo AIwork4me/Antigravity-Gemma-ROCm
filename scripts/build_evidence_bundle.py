@@ -44,6 +44,7 @@ TEXT_SUFFIXES = {
     ".yaml",
     ".toml",
     ".log",
+    ".xml",  # review R1 F-1: xml is redacted+scanned text, not opaque binary
 }
 
 CHAIN_FILES = (
@@ -130,7 +131,14 @@ def build_bundle(src: Path, dest: Path, name: str = "evidence-bundle-v1.0.1.zip"
     # and gpuval console captures duplicate the structured evidence dirs
     # (names are pinned to the gpuval- prefix so no legitimate evidence
     # ending in console.log can be swallowed — review T1.1 F-12).
-    BUNDLE_EXCLUDE = ("release_scan*.json", "gpuval*-console.log", "*.log.tmp")
+    # dxdiag dumps additionally embed MachineName/serial-shaped identifiers
+    # that redaction does not rewrite — excluded outright (review R1 F-1).
+    BUNDLE_EXCLUDE = (
+        "release_scan*.json",
+        "gpuval*-console.log",
+        "*.log.tmp",
+        "dxdiag*.xml",
+    )
     files = sorted(
         p
         for p in src.rglob("*")

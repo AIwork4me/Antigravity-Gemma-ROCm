@@ -210,8 +210,11 @@ Start with [`evidence/flagship-run/`](evidence/flagship-run/) — one complete p
 mission → tool calls → policy audit → pytest red/green → SHA256 before/after → diff.
 The **full evidence tree** (345+ files: backend A/B probes, 10-run stability matrix,
 offline isolation proof, independent RC1 audit) ships as
-`evidence-bundle-v1.0.0.zip` on the [v1.0.0 release](../../releases), inner
-`SHA256SUMS.txt` included. Deep-dive reports live in [docs/](docs/):
+`evidence-bundle-v1.0.0.zip` on the [v1.0.0 release](../../releases/tag/v1.0.0),
+inner `SHA256SUMS.txt` included; v1.0.1 adds
+`evidence-bundle-v1.0.1.zip` carrying the T1.x security-hardening evidence chain —
+see [docs/RELEASE_V1_0_1_VERIFICATION.md](docs/RELEASE_V1_0_1_VERIFICATION.md).
+Deep-dive reports live in [docs/](docs/):
 [RC1_INDEPENDENT_AUDIT](docs/RC1_INDEPENDENT_AUDIT.md) ·
 [SECURITY_BOUNDARY_REVIEW](docs/SECURITY_BOUNDARY_REVIEW.md) ·
 [OFFLINE_VALIDATION](docs/OFFLINE_VALIDATION.md) ·
@@ -230,9 +233,9 @@ first PR is a hardware-table row.
 
 ## Talk & credits
 
-This project premiered at a GDG DevFest talk on fully-local AI coding agents
-(ROCm + Gemma + Antigravity SDK on Ryzen AI MAX). Built on the shoulders of:
-[Gemma](https://ai.google.dev/gemma) · [Ollama](https://ollama.com) ·
+This project is being prepared for a GDG DevFest talk on fully-local AI coding
+agents (ROCm + Gemma + Antigravity SDK on Ryzen AI MAX). Built on the shoulders
+of: [Gemma](https://ai.google.dev/gemma) · [Ollama](https://ollama.com) ·
 [AMD ROCm](https://www.amd.com/en/products/software/adrenalin/rocm.html) ·
 google-antigravity SDK.
 

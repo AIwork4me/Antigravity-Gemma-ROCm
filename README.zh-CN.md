@@ -195,8 +195,11 @@ ASUS ProArt PX13 —— Ryzen AI MAX+ 395（16C/32T）、Radeon 8060S（gfx1151�
 从 [`evidence/flagship-run/`](evidence/flagship-run/) 开始 —— 一份完整证明：
 任务 → 工具调用 → 策略审计 → pytest 红转绿 → 前后 SHA256 → diff。
 **完整证据树**（345+ 文件：后端 A/B 探测、10 次稳定性矩阵、离线隔离证明、独立 RC1
-审计）以 `evidence-bundle-v1.0.0.zip` 附在 [v1.0.0 release](../../releases)，内含
-`SHA256SUMS.txt`。深度报告在 [docs/](docs/)：
+审计）以 `evidence-bundle-v1.0.0.zip` 附在 [v1.0.0 release](../../releases/tag/v1.0.0)，
+内含 `SHA256SUMS.txt`；v1.0.1 另附 `evidence-bundle-v1.0.1.zip`，收录 T1.x
+安全加固证据链 —— 见
+[docs/RELEASE_V1_0_1_VERIFICATION.md](docs/RELEASE_V1_0_1_VERIFICATION.md)。
+深度报告在 [docs/](docs/)：
 [RC1 独立审计](docs/RC1_INDEPENDENT_AUDIT.md) ·
 [安全边界评审](docs/SECURITY_BOUNDARY_REVIEW.md) ·
 [离线验证](docs/OFFLINE_VALIDATION.md) ·
@@ -214,8 +217,8 @@ ASUS ProArt PX13 —— Ryzen AI MAX+ 395（16C/32T）、Radeon 8060S（gfx1151�
 
 ## 演讲与致谢
 
-本项目在一场 GDG DevFest 演讲（Ryzen AI MAX 上的 ROCm + Gemma + Antigravity SDK
-全本地 AI 编程 agent）中首次公开。站在巨人肩上：
+本项目正在为一场 GDG DevFest 演讲（Ryzen AI MAX 上的 ROCm + Gemma + Antigravity
+SDK 全本地 AI 编程 agent）做准备。站在巨人肩上：
 [Gemma](https://ai.google.dev/gemma) · [Ollama](https://ollama.com) ·
 [AMD ROCm](https://www.amd.com/en/products/software/adrenalin/rocm.html) ·
 google-antigravity SDK。

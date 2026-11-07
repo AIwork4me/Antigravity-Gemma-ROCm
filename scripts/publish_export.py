@@ -115,6 +115,7 @@ TEXT_SUFFIXES = {
     ".yaml",
     ".toml",
     ".log",
+    ".xml",  # keep in sync with release_scan/build_evidence_bundle (review R1 F-1)
 }
 
 _RE_REPO_ROOT = re.compile(

@@ -341,8 +341,10 @@ class TestVerdict:
         "model_in_store": {"status": "PASS"},
         "live_probe": {"status": "PASS"},
         "residency": {"status": "PASS"},
+        "model_identity": {"status": "PASS"},
         "backend_live": {"status": "PASS", "backend": "ROCm"},
         "discovery_line": {"status": "PASS", "backend": "ROCm"},
+        "shared_interference": {"status": "PASS"},
     }
 
     def test_full_pass(self):
@@ -369,6 +371,14 @@ class TestVerdict:
         rep.pop("residency")
         assert gv._verdict(rep | {"agent": {"status": "PASS"}}, no_agent=False) == "BLOCKED"
 
+    def test_identity_mismatch_fails(self):
+        """/api/ps digest that contradicts `ollama list` fails the run."""
+        rep = self.BASE | {
+            "agent": {"status": "PASS"},
+            "model_identity": {"status": "FAIL", "reason": "identity mismatch"},
+        }
+        assert gv._verdict(rep, no_agent=False) == "FAIL"
+
     def test_no_agent_never_full_pass(self):
         """Env-probe scope gets an explicit ENV_PROBE_* label, never PASS."""
         rep = dict(self.BASE)
@@ -392,3 +402,475 @@ class TestDllPatternSyntax:
         """A dead probe must be visible in the rows, never silently absent."""
         rows = gv.tasklist_modules(["definitely*bad*pattern"])
         assert any(r["image"] == "__probe_errors__" for r in rows)
+
+
+# ------------------------------------------------- module names (real, not patterns)
+class TestModuleNames:
+    """T1.2 B-5: the evidence must carry the ACTUAL DLL names from the CSV
+    module cell — a trailing-star pattern hit is not proof of any DLL."""
+
+    @staticmethod
+    def _fake_tasklist(csv: str):
+        return lambda cmd, timeout=90: {"ok": True, "stdout": csv, "stderr": "", "rc": 0}
+
+    def test_real_dll_names_recorded(self, monkeypatch):
+        csv = (
+            '"映像名称","PID","模块"\r\n"llama-server.exe","200","amdhip64_7.dll, rocblas.dll"\r\n'
+        )
+        monkeypatch.setattr(gv, "_run", self._fake_tasklist(csv))
+        rows = gv.tasklist_modules(["amdhip64*"])
+        assert rows == [
+            {
+                "image": "llama-server.exe",
+                "pid": "200",
+                "modules": ["amdhip64_7.dll", "rocblas.dll"],
+            }
+        ]
+
+    def test_pattern_never_recorded_as_module(self, monkeypatch):
+        csv = '"映像名称","PID","模块"\r\n"llama-server.exe","200","amdhip64_7.dll"\r\n'
+        monkeypatch.setattr(gv, "_run", self._fake_tasklist(csv))
+        rows = gv.tasklist_modules(["amdhip64*"])
+        assert rows[0]["modules"] == ["amdhip64_7.dll"]
+        assert "amdhip64*" not in rows[0]["modules"]
+
+    def test_no_module_cell_fails_closed(self, monkeypatch):
+        """A 2-cell row must not fabricate a module name from the pattern."""
+        csv = '"映像名称","PID"\r\n"llama-server.exe","200"\r\n'
+        monkeypatch.setattr(gv, "_run", self._fake_tasklist(csv))
+        rows = gv.tasklist_modules(["amdhip64*"])
+        assert rows == [{"image": "llama-server.exe", "pid": "200", "modules": []}]
+
+    def test_na_and_non_dll_dropped(self, monkeypatch):
+        csv = '"映像名称","PID","模块"\r\n"llama-server.exe","200","N/A"\r\n'
+        monkeypatch.setattr(gv, "_run", self._fake_tasklist(csv))
+        rows = gv.tasklist_modules(["amdhip64*"])
+        assert rows == [{"image": "llama-server.exe", "pid": "200", "modules": []}]
+
+    def test_localized_banner_yields_no_rows(self, monkeypatch):
+        monkeypatch.setattr(
+            gv, "_run", self._fake_tasklist("信息: 没有运行的任务匹配指定标准。\r\n")
+        )
+        assert gv.tasklist_modules(["amdhip64*"]) == []
+
+
+# ---------------------------------------------------------- model identity
+class TestModelIdentity:
+    ROW = "gemma4:26b    17ab34cd1234   17 GB   5 days ago"
+
+    def test_digest_extends_list_id(self):
+        r = gv.crosscheck_model_identity(self.ROW, "17ab34cd1234" + "f" * 52)
+        assert r["status"] == "PASS" and r["id12"] == "17ab34cd1234"
+
+    def test_digest_mismatch_fails(self):
+        r = gv.crosscheck_model_identity(self.ROW, "99" * 32)
+        assert r["status"] == "FAIL" and "mismatch" in r["reason"]
+
+    def test_row_without_id_blocked(self):
+        r = gv.crosscheck_model_identity("no id here", "0" * 64)
+        assert r["status"] == "BLOCKED"
+
+
+# ------------------------------------------------------ runner attribution
+class TestRunnerAttribution:
+    """T1.2 B-5/3.4: DLL evidence only counts from runners that descend
+    from OUR owned server PID; a foreign runner proves nothing."""
+
+    PROCS = [
+        {"pid": 100, "ppid": 1, "name": "ollama.exe"},  # our owned server
+        {"pid": 200, "ppid": 100, "name": "llama-server.exe"},  # OUR runner
+        {"pid": 300, "ppid": 2, "name": "llama-server.exe"},  # foreign runner
+    ]
+    ROWS = [
+        {"image": "llama-server.exe", "pid": "200", "modules": ["amdhip64_7.dll", "rocblas.dll"]},
+        {"image": "llama-server.exe", "pid": "300", "modules": ["vulkan-1.dll"]},
+    ]
+
+    def test_only_descendant_runner_counts(self, monkeypatch):
+        monkeypatch.setattr(gv, "process_snapshot", lambda: self.PROCS)
+        r = gv.attribute_runner(100, self.ROWS)
+        assert r["status"] == "PASS" and r["backend"] == "ROCm"
+        assert r["owned_runner_pids"] == ["200"]
+
+    def test_foreign_runner_only_is_blocked(self, monkeypatch):
+        monkeypatch.setattr(gv, "process_snapshot", lambda: self.PROCS)
+        rows = [self.ROWS[1]]  # only the foreign vulkan runner observed
+        r = gv.attribute_runner(100, rows)
+        assert r["status"] == "BLOCKED"
+
+    def test_no_descendant_runner_blocked(self, monkeypatch):
+        procs = [self.PROCS[0], self.PROCS[2]]
+        monkeypatch.setattr(gv, "process_snapshot", lambda: procs)
+        r = gv.attribute_runner(100, self.ROWS)
+        assert r["status"] == "BLOCKED" and "descends" in r["reason"]
+
+    def test_cim_unavailable_blocks(self, monkeypatch):
+        """No process data -> ownership unprovable -> BLOCKED (fail closed)."""
+        monkeypatch.setattr(gv, "process_snapshot", lambda: [])
+        r = gv.attribute_runner(100, self.ROWS)
+        assert r["status"] == "BLOCKED"
+
+    def test_transitive_descendants(self):
+        procs = [
+            {"pid": 100, "ppid": 1, "name": "ollama.exe"},
+            {"pid": 150, "ppid": 100, "name": "shim.exe"},
+            {"pid": 200, "ppid": 150, "name": "llama-server.exe"},
+            {"pid": 999, "ppid": 3, "name": "unrelated.exe"},
+        ]
+        assert gv.descendants_of(100, procs) == {150, 200}
+
+    def test_shared_mode_annotated_unattributed(self, monkeypatch):
+        monkeypatch.setattr(gv, "process_snapshot", lambda: self.PROCS)
+        r = gv.attribute_runner(None, self.ROWS)
+        assert r["status"] == "PASS"  # classify both, but flagged
+        assert "not provable" in r["attribution"]
+
+
+# ------------------------------------------------------ shared-server non-interference
+class FakeProc:
+    def __init__(self, pid=4242):
+        self.pid = pid
+        self._alive = True
+        self.returncode = None
+        self.signals = []
+
+    def poll(self):
+        return None if self._alive else (self.returncode if self.returncode is not None else 0)
+
+    def wait(self, timeout=None):
+        self._alive = False
+        return self.returncode if self.returncode is not None else 0
+
+    def send_signal(self, sig):
+        self.signals.append(sig)
+
+
+class TestSharedNonInterference:
+    """T1.2 Phase 1: the default run must never touch the shared server."""
+
+    def _owned(self, tmp_path):
+        return gv.OwnedServer(Path("C:/fake/ollama.exe"), tmp_path / "owned-server.log")
+
+    def test_default_start_never_evicts_shared_models(self, monkeypatch, tmp_path):
+        """start() with no opt-in must make ZERO requests to the shared
+        11434 base (the old code evicted every resident model here)."""
+        calls = []
+
+        def fake_http(url, payload=None, timeout=240):
+            calls.append(url)
+            if url.endswith("/api/version"):
+                return {"version": "0.40.14"}
+            return {"models": []}
+
+        monkeypatch.setattr(gv, "_http_json", fake_http)
+        monkeypatch.setattr(gv, "_port_in_use", lambda port, host="127.0.0.1": False)
+        proc = FakeProc()
+        monkeypatch.setattr(gv.subprocess, "Popen", lambda *a, **k: proc)
+        owned = self._owned(tmp_path)
+        owned.start()
+        try:
+            shared = [u for u in calls if "11434" in u]
+            assert shared == [], f"default start() touched the shared server: {shared}"
+        finally:
+            monkeypatch.setattr(gv, "process_snapshot", lambda: [])
+            owned.stop()
+
+    def test_evict_is_explicit_opt_in(self, monkeypatch, tmp_path):
+        calls = []
+
+        def fake_http(url, payload=None, timeout=240):
+            calls.append((url, payload))
+            if url.endswith("/api/ps"):
+                return {"models": [{"name": "qwen3:8b"}, {"name": "llama3:8b"}]}
+            return {}
+
+        monkeypatch.setattr(gv, "_http_json", fake_http)
+        owned = self._owned(tmp_path)
+        r = owned.evict_shared_models()
+        assert r["status"] == "PASS" and sorted(r["evicted"]) == ["llama3:8b", "qwen3:8b"]
+        evictions = [(u, p) for u, p in calls if u.endswith("/api/generate")]
+        assert all(p.get("keep_alive") == 0 for _, p in evictions)
+        assert len(evictions) == 2  # per model — "*" is not a valid tag
+
+    def test_evict_survives_unreachable_shared(self, monkeypatch, tmp_path):
+        def boom(url, payload=None, timeout=240):
+            raise OSError("refused")
+
+        monkeypatch.setattr(gv, "_http_json", boom)
+        r = self._owned(tmp_path).evict_shared_models()
+        assert r["status"] == "BLOCKED"
+
+    def test_port_conflict_blocks_without_killing(self, monkeypatch, tmp_path):
+        """An occupied OWN_PORT means someone else owns it: BLOCKED, and we
+        never spawn, never kill, never probe their server."""
+        spawns, kills = [], []
+
+        monkeypatch.setattr(gv, "_port_in_use", lambda port, host="127.0.0.1": True)
+        monkeypatch.setattr(
+            gv.subprocess,
+            "Popen",
+            lambda *a, **k: spawns.append(a) or FakeProc(),
+        )
+
+        def fake_run(cmd, timeout=90):
+            if cmd[:1] == ["taskkill"]:
+                kills.append(cmd)
+            return {"ok": True, "stdout": "", "stderr": "", "rc": 0}
+
+        monkeypatch.setattr(gv, "_run", fake_run)
+        owned = self._owned(tmp_path)
+        with pytest.raises(gv.PortOwnedError):
+            owned.start()
+        assert spawns == [] and kills == []
+
+    def test_start_failure_still_redacts_and_reaps(self, monkeypatch, tmp_path):
+        """Fast-death path: serve exits immediately -> RuntimeError path in
+        main() calls stop(); log gets closed and redacted, runners reaped."""
+        owned = self._owned(tmp_path)
+        monkeypatch.setattr(gv, "_port_in_use", lambda port, host="127.0.0.1": False)
+        proc = FakeProc()
+        proc._alive = False  # poll() != None -> "exited rc" branch
+        proc.returncode = 1
+        monkeypatch.setattr(gv.subprocess, "Popen", lambda *a, **k: proc)
+        with pytest.raises(RuntimeError, match="exited"):
+            owned.start()
+        reaped = []
+
+        def fake_run(cmd, timeout=90):
+            if cmd[:1] == ["taskkill"]:
+                reaped.append(cmd)
+            return {"ok": True, "stdout": "", "stderr": "", "rc": 0}
+
+        monkeypatch.setattr(gv, "_run", fake_run)
+        monkeypatch.setattr(
+            gv,
+            "process_snapshot",
+            lambda: [
+                {"pid": 555, "ppid": proc.pid, "name": "llama-server.exe"},  # orphan of OURS
+                {"pid": 666, "ppid": 999, "name": "llama-server.exe"},  # someone else's
+            ],
+        )
+        owned.stop()
+        # only the orphan UNDER OUR PID was targeted, by PID — never by name
+        assert reaped == [["taskkill", "/F", "/PID", "555"]]
+
+    def test_teardown_targets_only_own_pid_tree(self, monkeypatch, tmp_path):
+        kills = []
+        monkeypatch.setattr(gv, "_port_in_use", lambda port, host="127.0.0.1": False)
+        proc = FakeProc(pid=777)
+
+        def refuse_break(sig):  # force the taskkill fallback path
+            raise OSError("not attached to this console")
+
+        proc.send_signal = refuse_break
+        monkeypatch.setattr(gv.subprocess, "Popen", lambda *a, **k: proc)
+        monkeypatch.setattr(gv, "_http_json", lambda url, payload=None, timeout=240: {})
+        monkeypatch.setattr(gv, "process_snapshot", lambda: [])
+
+        def fake_run(cmd, timeout=90):
+            if cmd[:1] == ["taskkill"]:
+                kills.append(cmd)
+            return {"ok": True, "stdout": "", "stderr": "", "rc": 0}
+
+        monkeypatch.setattr(gv, "_run", fake_run)
+        owned = self._owned(tmp_path)
+        owned.start()
+        owned.stop()
+        # exactly one tree-kill of our own PID; nothing image-scoped
+        assert kills == [["taskkill", "/F", "/T", "/PID", "777"]]
+
+    def test_stop_is_idempotent(self, monkeypatch, tmp_path):
+        kills = []
+
+        def fake_run(cmd, timeout=90):
+            if cmd[:1] == ["taskkill"]:
+                kills.append(cmd)
+            return {"ok": True, "stdout": "", "stderr": "", "rc": 0}
+
+        monkeypatch.setattr(gv, "_run", fake_run)
+        monkeypatch.setattr(gv, "process_snapshot", lambda: [])
+        monkeypatch.setattr(gv, "_port_in_use", lambda port, host="127.0.0.1": False)
+        proc = FakeProc()
+        monkeypatch.setattr(gv.subprocess, "Popen", lambda *a, **k: proc)
+        monkeypatch.setattr(gv, "_http_json", lambda url, payload=None, timeout=240: {})
+        owned = self._owned(tmp_path)
+        owned.start()
+        owned.stop()
+        owned.stop()
+        owned.stop()
+        assert kills == []  # graceful CTRL_BREAK path — no kill needed at all
+
+    def test_log_redaction_happens_on_every_stop_path(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(gv, "process_snapshot", lambda: [])
+        monkeypatch.setattr(
+            gv, "_run", lambda cmd, timeout=90: {"ok": True, "stdout": "", "stderr": "", "rc": 0}
+        )
+        owned = self._owned(tmp_path)
+        owned.log_path.write_text(
+            r"blob at C:\Users\x\Desktop\Antigravity\.ollama\models\x", encoding="utf-8"
+        )
+        owned.stop()
+        assert "C:\\Users" not in owned.log_path.read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------------ run seal
+class TestSeal:
+    def test_seal_hashes_every_evidence_file(self, tmp_path):
+        (tmp_path / "env.json").write_bytes(b'{"overall": "PASS"}')
+        sub = tmp_path / "agent"
+        sub.mkdir()
+        (sub / "summary.json").write_bytes(b"{}")
+        seal = gv._seal_run(tmp_path)
+        files = seal["files"]
+        assert set(files) == {"env.json", "agent/summary.json"}  # seal.json excluded
+        assert files["env.json"] == hashlib.sha256(b'{"overall": "PASS"}').hexdigest()
+        assert json.loads((tmp_path / "seal.json").read_text(encoding="utf-8"))["files"] == files
+
+
+# --------------------------------------------- round-1 review fixes (T1.2)
+class TestRound1Fixes:
+    """Regression tests for the adversarial review R1 findings."""
+
+    # --- F-10: anchored DLL family matching -------------------------------
+    @pytest.mark.parametrize(
+        ("module", "is_rocm"),
+        [
+            ("amdhip64_7.dll", True),
+            ("amdhip64.dll", True),
+            ("libhipblas.dll", True),
+            ("rocblas.dll", True),
+            ("rocblasLt.dll", False),  # letter-suffixed variant: fail-closed
+            ("myrocblas.dll", False),  # substring hit — must NOT count
+            ("nvcuda-fake.dll", False),  # hyphenated impersonation
+            ("fakeamdhip64.dll", False),
+            ("vulkan-1.dll", False),
+            ("kernel32.dll", False),
+        ],
+    )
+    def test_dll_family_anchored(self, module, is_rocm):
+        assert gv._dll_family(module, gv.ROCM_DLLS) is is_rocm
+
+    def test_cuda_family_anchored(self):
+        assert gv._dll_family("cudart64_12.dll", gv.CUDA_DLLS)
+        assert not gv._dll_family("nvcuda-fake.dll", gv.CUDA_DLLS)
+        assert not gv._dll_family("mycudart.dll", gv.CUDA_DLLS)
+
+    # --- F-11: exact runner image ------------------------------------------
+    def test_lookalike_runner_image_is_not_a_runner(self):
+        rows = [{"image": "llama-server-evil.exe", "pid": "1", "modules": ["rocblas.dll"]}]
+        r = gv.classify_backend(rows)
+        assert r["status"] == "BLOCKED"
+
+    def test_lookalike_runner_not_reaped(self, monkeypatch, tmp_path):
+        """The orphan sweep must never target llama-server-evil.exe."""
+        monkeypatch.setattr(gv, "process_snapshot", lambda: [])
+        monkeypatch.setattr(
+            gv, "_run", lambda cmd, timeout=90: {"ok": True, "stdout": "", "stderr": "", "rc": 0}
+        )
+        owned = gv.OwnedServer(Path("C:/fake/ollama.exe"), tmp_path / "log")
+        proc = FakeProc(pid=31337)
+        monkeypatch.setattr(gv.subprocess, "Popen", lambda *a, **k: proc)
+        monkeypatch.setattr(gv, "_http_json", lambda url, payload=None, timeout=240: {})
+        monkeypatch.setattr(gv, "_port_in_use", lambda port, host="127.0.0.1": False)
+        owned.start()
+        monkeypatch.setattr(
+            gv,
+            "process_snapshot",
+            lambda: [
+                {"pid": 900, "ppid": 31337, "name": "llama-server-evil.exe"},
+                {"pid": 901, "ppid": 31337, "name": "llama-server.exe"},
+            ],
+        )
+        kills = []
+
+        def fake_run(cmd, timeout=90):
+            if cmd[:1] == ["taskkill"]:
+                kills.append(cmd)
+            return {"ok": True, "stdout": "", "stderr": "", "rc": 0}
+
+        monkeypatch.setattr(gv, "_run", fake_run)
+
+        def refuse_break(sig):
+            raise OSError("no console")
+
+        proc.send_signal = refuse_break
+        owned.stop()
+        # only the genuine runner under our PID is reaped (by exact PID)
+        assert kills == [
+            ["taskkill", "/F", "/T", "/PID", "31337"],
+            ["taskkill", "/F", "/PID", "901"],
+        ]
+
+    # --- F-7: enforced non-interference ------------------------------------
+    @staticmethod
+    def _args(shared=False, evict=False):
+        import argparse
+
+        return argparse.Namespace(shared_server=shared, evict_shared_models=evict)
+
+    def test_interference_unchanged_passes(self):
+        rep = {
+            "shared_ps_before": {"status": "PASS", "resident": ["a:1b"]},
+            "shared_ps_after": {"status": "PASS", "resident": ["a:1b"]},
+        }
+        assert gv._shared_interference_gate(rep, self._args())["status"] == "PASS"
+
+    def test_interference_changed_without_optin_fails(self):
+        rep = {
+            "shared_ps_before": {"status": "PASS", "resident": ["a:1b"]},
+            "shared_ps_after": {"status": "PASS", "resident": []},
+        }
+        r = gv._shared_interference_gate(rep, self._args())
+        assert r["status"] == "FAIL" and "fail-closed" in r["reason"]
+
+    def test_interference_changed_with_optin_passes(self):
+        rep = {
+            "shared_ps_before": {"status": "PASS", "resident": ["a:1b"]},
+            "shared_ps_after": {"status": "PASS", "resident": []},
+        }
+        assert gv._shared_interference_gate(rep, self._args(evict=True))["status"] == "PASS"
+
+    def test_no_shared_server_is_trivially_clean(self):
+        rep = {
+            "shared_ps_before": {"status": "BLOCKED", "reason": "unreachable"},
+            "shared_ps_after": {"status": "BLOCKED", "reason": "unreachable"},
+        }
+        assert gv._shared_interference_gate(rep, self._args())["status"] == "PASS"
+
+    def test_shared_server_vanished_mid_run_blocks(self):
+        rep = {
+            "shared_ps_before": {"status": "PASS", "resident": ["a:1b"]},
+            "shared_ps_after": {"status": "BLOCKED", "reason": "unreachable"},
+        }
+        assert gv._shared_interference_gate(rep, self._args())["status"] == "BLOCKED"
+
+    def test_interference_gate_is_a_must_key(self):
+        """A run that never recorded the gate cannot be a PASS."""
+        base = dict(TestVerdict.BASE | {"agent": {"status": "PASS"}})
+        assert gv._verdict(base, no_agent=False) == "PASS"
+        broken = dict(base)
+        broken.pop("shared_interference")
+        assert gv._verdict(broken, no_agent=False) == "BLOCKED"
+
+    # --- F-9: contradictory flags rejected ---------------------------------
+    def test_shared_server_plus_evict_rejected(self, monkeypatch):
+        monkeypatch.setattr(
+            sys, "argv", ["gpu_validate.py", "--shared-server", "--evict-shared-models"]
+        )
+        with pytest.raises(SystemExit) as e:
+            gv.main()
+        assert e.value.code == 2
+
+    # --- F-2: REPORT.md ships redacted --------------------------------------
+    def test_report_md_is_redacted(self, tmp_path):
+        rep = dict(TestVerdict.BASE | {"agent": {"status": "PASS"}})
+        rep["overall"] = "PASS"
+        rep["run_id"] = "gpuval-test"
+        rep["scope"] = "full"
+        rep["owned_server"] = {
+            "status": "BLOCKED",
+            "reason": "owned server failed to start: see C:\\Users\\x\\Desktop\\Antigravity\\a.log",
+        }
+        gv._write(tmp_path, rep)
+        text = (tmp_path / "REPORT.md").read_text(encoding="utf-8")
+        assert "C:\\Users" not in text and "<repo>" in text
