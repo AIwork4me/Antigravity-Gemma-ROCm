@@ -36,6 +36,19 @@ default-disable execution (`build_config(enable_shell=False)`) or require
 explicit human approval plus a low-privilege account. Details and red-team
 results: [docs/SECURITY_BOUNDARY_REVIEW.md](docs/SECURITY_BOUNDARY_REVIEW.md).
 
+**Executable shadowing (why syntax validation ≠ execution isolation):** the
+policy validates the command *string*, but the SDK harness resolves the
+executable with the OS. On default-config Windows, `cmd.exe` and
+`CreateProcess` search the **current directory before PATH** — and the
+workspace Cwd is writable by the agent, so a planted `python.bat` /
+`pytest.exe` inside the workspace can hijack an "allowed" command
+(`tests/test_exec_resolution.py` pins this with a harmless sentinel). The
+policy layer cannot rewrite commands to absolute interpreter paths, so we do
+not claim command-syntax validation provides execution isolation; treat the
+workspace as trusted input, or set
+`NoDefaultCurrentDirectoryInExePath` / run from a non-writable Cwd for
+defense in depth.
+
 ## Scope
 
 - ✅ In scope: the policy predicates, workspace resolution, web dashboard

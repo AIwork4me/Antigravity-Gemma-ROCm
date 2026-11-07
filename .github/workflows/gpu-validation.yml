@@ -1,26 +1,70 @@
-name: GPU physical validation (opt-in)
+name: GPU physical validation (opt-in, protected)
 
-# NEVER runs automatically. Physical hardware gate: dispatch manually on a
-# self-hosted Windows runner that has Ollama + an AMD GPU (ROCm) and the
-# reference model pulled. Produces honest PASS/FAIL/BLOCKED evidence —
-# a CPU CI runner must never produce a GPU "PASS".
+# NEVER runs automatically and NEVER on fork PRs (workflow_dispatch requires
+# write access and the job `if` below restricts execution further). Physical
+# hardware gate: dispatch manually on a self-hosted Windows runner with
+# Ollama + an AMD GPU (ROCm) and the reference model pulled. Produces honest
+# PASS / FAIL / BLOCKED evidence — a CPU CI runner must never produce a GPU
+# "PASS".
+#
+# Runner-security model (T1.1):
+#   - untrusted dispatch inputs NEVER touch a shell string: they travel via
+#     environment variables and are validated (charset, one line, no
+#     metacharacters) by a dedicated fail-closed step before anything runs
+#   - `environment: gpu-validation` routes dispatch through a protected
+#     environment — the owner MUST configure required reviewers there;
+#     until then it is auto-created and NOT an approval gate
+#   - the `if:` guard below bounds execution to this repo's main/tags; it
+#     stops forks and arbitrary branches, NOT repo writers pushing a tag
+#   - checkout persists no credentials; job permissions are read-only
+#   - concurrency=1 protects the physical machine from overlapping runs
+#   - uploaded artifacts are redacted by scripts/gpu_validate.py itself
+#     (owned-server.log is rewritten redacted on every stop() path)
 on:
   workflow_dispatch:
     inputs:
       model:
         description: "Ollama model tag (default gemma4:26b)"
         required: false
-        default: gemma4:26b
-      with-agent:
-        description: "Run the live agent demo (red->green)"
+        default: "gemma4:26b"
+      run_agent:
+        description: "Run the live agent stage (red->green)"
+        type: boolean
         required: false
-        default: "true"
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpu-validation
+  cancel-in-progress: false
 
 jobs:
   gpu-validate:
+    # only this repository's protected refs — never forks, never arbitrary
+    # branches executing on persistent self-hosted GPU runners
+    if: >-
+      github.repository == 'AIwork4me/Antigravity-Gemma-ROCm' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: [self-hosted, Windows, ROCm]
+    timeout-minutes: 45
+    environment: gpu-validation
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate dispatch inputs (fail closed)
+        shell: python
+        env:
+          GPUVAL_MODEL: ${{ inputs.model }}
+        run: |
+          import os, re, sys
+          tag = os.environ.get("GPUVAL_MODEL", "")
+          valid = bool(re.match(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$", tag)) and "\n" not in tag
+          print(("VALID model tag: " if valid else "REJECTED model tag: ") + repr(tag))
+          sys.exit(0 if valid else 2)
 
       - name: Set up venv
         run: |
@@ -28,14 +72,17 @@ jobs:
           .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 
       - name: Physical GPU validation
+        timeout-minutes: 40
+        shell: pwsh
         env:
-          AGENT_MODEL: ${{ github.event.inputs.model }}
-        run: >
-          .\.venv\Scripts\python.exe scripts\gpu_validate.py
-          --model ${{ github.event.inputs.model }}
-          ${{ github.event.inputs.with-agent == 'true' && '--with-agent' || '--no-agent' }}
+          GPUVAL_MODEL: ${{ inputs.model }}
+          GPUVAL_RUN_AGENT: ${{ inputs.run_agent }}
+        run: |
+          $gv = @("--model", $env:GPUVAL_MODEL, "--require-backend", "ROCm")
+          if ($env:GPUVAL_RUN_AGENT -eq "true") { $gv += "--with-agent" } else { $gv += "--no-agent" }
+          .\.venv\Scripts\python.exe scripts\gpu_validate.py @gv
 
-      - name: Upload evidence
+      - name: Upload evidence (redacted by the validation script)
         if: always()
         uses: actions/upload-artifact@v4
         with:

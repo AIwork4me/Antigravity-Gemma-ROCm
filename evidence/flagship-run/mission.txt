@@ -1,7 +1,7 @@
 You are working in a small Python project in the current workspace. The pytest suite is currently failing. Your task:
 1. List the files in the workspace to understand the project.
 2. Read the source file stats_utils.py and the tests in tests/test_stats.py.
-3. Run the test suite with: python -m pytest tests/ -q
+3. Run the test suite from the workspace root with: python -m pytest tests/ -q
 4. Find the bug that makes the failing tests fail, fix it by editing stats_utils.py.
 5. Re-run the tests and confirm they all pass.
 6. Reply with a short summary of the root cause and your fix.

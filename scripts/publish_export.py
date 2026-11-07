@@ -125,7 +125,7 @@ _RE_HOME = re.compile(r"[A-Za-z]:[/\\]+Users[/\\]+[A-Za-z0-9_.-]+", re.IGNORECAS
 _RE_UNC_HOME = re.compile(
     r"\\\\[A-Za-z0-9_.-]+\\[A-Za-z]\$\\+Users\\+[A-Za-z0-9_.-]+", re.IGNORECASE
 )
-_RE_UNIX_HOME = re.compile(r"/home/[A-Za-z0-9_.-]+")
+_RE_UNIX_HOME = re.compile(r"/(?:home|Users)/[A-Za-z0-9_.-]+")
 
 
 def redact_text(text: str) -> tuple[str, int]:

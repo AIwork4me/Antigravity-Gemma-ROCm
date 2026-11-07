@@ -1,9 +1,9 @@
-run_command decision=DENY args={'CommandLine': 'dir /s /b', 'Cwd': '<repo>\\demo_workspace', 'WaitMsBeforeAsync': 1000}
-run_command decision=DENY args={'CommandLine': 'dir', 'Cwd': '<repo>\\demo_workspace', 'WaitMsBeforeAsync': 1000}
-run_command decision=DENY args={'CommandLine': 'ls', 'Cwd': '<repo>\\demo_workspace', 'WaitMsBeforeAsync': 1000}
-run_command decision=DENY args={'CommandLine': 'Get-ChildItem', 'Cwd': '<repo>\\demo_workspace', 'WaitMsBeforeAsync': 1000}
-file_tool decision=ALLOW path='<repo>\\demo_workspace\\stats_utils.py'
-file_tool decision=ALLOW path='<repo>\\demo_workspace\\tests\\test_stats.py'
-run_command decision=ALLOW args={'CommandLine': 'python -m pytest tests/ -q', 'Cwd': '<repo>\\demo_workspace', 'WaitMsBeforeAsync': 1000}
+run_command decision=DENY args={'CommandLine': 'dir /b', 'Cwd': '<repo>\\demo_workspace', 'WaitMsBeforeAsync': 500}
+run_command decision=DENY args={'CommandLine': 'dir', 'Cwd': '<repo>\\demo_workspace', 'WaitMsBeforeAsync': 500}
+run_command decision=DENY args={'CommandLine': 'python -c "import os; print(os.listdir(\'.\'))"', 'Cwd': '<repo>\\demo_workspace', 'WaitMsBeforeAsync': 500}
+run_command decision=DENY args={'CommandLine': 'ls', 'Cwd': '<repo>\\demo_workspace', 'WaitMsBeforeAsync': 500}
+file_tool decision=ALLOW path='<repo>/demo_workspace/stats_utils.py'
+file_tool decision=ALLOW path='<repo>/demo_workspace/tests/test_stats.py'
+run_command decision=ALLOW args={'CommandLine': 'python -m pytest tests/ -q', 'Cwd': '<repo>\\demo_workspace', 'WaitMsBeforeAsync': 500}
 file_tool decision=ALLOW path='<none>'
-run_command decision=ALLOW args={'CommandLine': 'python -m pytest tests/ -q', 'Cwd': '<repo>\\demo_workspace', 'WaitMsBeforeAsync': 1000}
+run_command decision=ALLOW args={'CommandLine': 'python -m pytest tests/ -q', 'Cwd': '<repo>\\demo_workspace', 'WaitMsBeforeAsync': 500}

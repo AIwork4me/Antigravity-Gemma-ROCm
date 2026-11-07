@@ -144,6 +144,27 @@ def test_enforce_exit_codes(tmp_path, monkeypatch):
     assert report["findings"]
 
 
+def test_missing_requested_paths_fail_closed(tmp_path):
+    """A requested export root or archive that does not exist must exit 2,
+    never silently skip the scan (T1.1)."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("ok\n", encoding="utf-8")
+    out = tmp_path / "r.json"
+    rc = rs.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--extra-root",
+            str(tmp_path / "no-such-export"),
+            "--zip",
+            str(tmp_path / "no-such.zip"),
+            "--json-out",
+            str(out),
+        ]
+    )
+    assert rc == 2
+
+
 def test_scan_zip_skipped_members_are_findings(tmp_path, monkeypatch):
     """Members beyond the count/size limits must FAIL enforcement, not be
     silently skipped (independent review F-9)."""

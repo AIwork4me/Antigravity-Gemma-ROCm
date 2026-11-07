@@ -4,7 +4,16 @@ One complete, walkable proof that the local agent really fixes a bug.
 All files in this directory come from actual runs on the reference machine
 (AMD Ryzen AI MAX+ 395 / Radeon 8060S / gfx1151, Ollama, ROCm backend).
 
-## The paper trail — CLI run `demo3` (gemma4:26b, 74 s, 5 tool calls)
+## The paper trail — CLI run `gpuval-20261107-202720` (gemma4:26b, 71 s, 5 tool calls)
+
+Run on 2026-11-07 inside the attribution-first physical GPU gate
+(`scripts/gpu_validate.py`: private `ollama serve` instance with a captured
+log, full model digest + 100% VRAM residency, ROCm proven from both the
+owned server's discovery line `library=ROCm compute=gfx1151` and the live
+runner-process DLLs — `libhipblas.dll`, `rocblas.dll`, `amdhip64_7.dll`;
+see the bundle's `gpu-validation/` tree). The earlier `demo3` chain (74 s,
+same task, same policy) remains in the v1.0.0 release bundle and git
+history.
 
 | Step | File | What it proves |
 |---|---|---|

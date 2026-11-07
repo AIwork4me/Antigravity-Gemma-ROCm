@@ -138,6 +138,8 @@ ALLOW_RULES: list[dict] = [
     {"kind": "unc_user_path", "path_glob": "tests/test_release_scan.py"},
     {"kind": "pct_encoded_path", "path_glob": "tests/test_release_scan.py"},
     {"kind": "abs_win_user_path", "path_glob": "tests/test_publish_export.py"},
+    {"kind": "abs_win_user_path", "path_glob": "tests/test_verify_bundle.py"},
+    {"kind": "abs_unix_user_path", "path_glob": "tests/test_verify_bundle.py"},
     # git@github.com:owner/repo is an SSH remote, not an email address.
     {"kind": "email", "snippet_regex": r"git@github\.com"},
     # Placeholder usernames used in documentation examples.
@@ -300,16 +302,22 @@ def main(argv: list[str] | None = None) -> int:
     files, findings = scan_root(args.root)
     total_files += files
     all_findings += findings
+    # a requested-but-missing export/archive must FAIL CLOSED: silently
+    # skipping it would let an unbuilt/renamed tree bypass the scan (T1.1)
     for extra in args.extra_root:
-        if Path(extra).exists():
-            files, findings = scan_root(Path(extra))
-            total_files += files
-            all_findings += findings
+        if not Path(extra).is_dir():
+            print(f"ENFORCE: requested export root missing: {extra}")
+            return 2
+        files, findings = scan_root(Path(extra))
+        total_files += files
+        all_findings += findings
     for z in args.zip:
-        if Path(z).exists():
-            files, findings = scan_zip(Path(z))
-            total_files += files
-            all_findings += findings
+        if not Path(z).is_file():
+            print(f"ENFORCE: requested archive missing: {z}")
+            return 2
+        files, findings = scan_zip(Path(z))
+        total_files += files
+        all_findings += findings
 
     report = {
         "scanned_roots": [str(args.root)]
