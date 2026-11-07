@@ -1,0 +1,12 @@
+{
+  "model": "gemma4:26b",
+  "base_url": "http://127.0.0.1:11434/v1",
+  "workspaces": [
+    "C:\\Users\\rocm\\Desktop\\Antigravity\\demo_workspace"
+  ],
+  "policies": [
+    "workspace_only(demo_workspace)",
+    "ask_user(run_command, strict whitelist)"
+  ],
+  "preset": "lightweight"
+}

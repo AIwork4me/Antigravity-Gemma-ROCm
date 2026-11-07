@@ -1,0 +1,18 @@
+{
+  "run_id": "demo3",
+  "model": "gemma4:26b",
+  "bug_present_before": true,
+  "bug_fixed_after": true,
+  "files_changed": [
+    "stats_utils.py"
+  ],
+  "elapsed_s": 74.0,
+  "n_tool_calls": 5,
+  "tool_names": [
+    "view_file",
+    "view_file",
+    "run_command",
+    "edit_file",
+    "run_command"
+  ]
+}

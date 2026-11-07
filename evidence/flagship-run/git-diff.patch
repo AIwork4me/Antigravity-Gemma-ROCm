@@ -1,0 +1,12 @@
+diff --git a/demo_workspace/stats_utils.py b/demo_workspace/stats_utils.py
+index 7cde2c1..ce3ce52 100644
+--- a/demo_workspace/stats_utils.py
++++ b/demo_workspace/stats_utils.py
+@@ -22,6 +22,4 @@ def median(values):
+     mid = n // 2
+     if n % 2 == 1:
+         return vals[mid]
+-    # BUG (planted): for even-length data the lower middle element is
+-    # returned instead of the average of the two middle elements.
+-    return vals[mid - 1]
++    return (vals[mid - 1] + vals[mid]) / 2
