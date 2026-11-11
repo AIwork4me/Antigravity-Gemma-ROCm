@@ -1,0 +1,12 @@
+{
+  "model": "gemma4:26b",
+  "base_url": "http://127.0.0.1:11434/v1",
+  "workspaces": [
+    "<repo>/devfest_workspace"
+  ],
+  "policies": [
+    "file tools: allow+when path resolves inside devfest_workspace",
+    "run_command: ask_user handler, structured fail-closed allowlist (python -m pytest / pytest only, in-workspace Cwd required)"
+  ],
+  "preset": "lightweight"
+}

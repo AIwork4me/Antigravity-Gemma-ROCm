@@ -1,0 +1,5 @@
+{
+  "exit_code": 1,
+  "stdout": "..F......                                                                [100%]\n================================== FAILURES ===================================\n_________________________ test_last_seat_is_admitted __________________________\ntests\\test_checkin.py:25: in test_last_seat_is_admitted\n    assert register(\"Last Dev\", CAPACITY - 1) == {\"name\": \"Last Dev\", \"seat\": CAPACITY}\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ncheckin.py:47: in register\n    raise RegistrationError(\nE   checkin.RegistrationError: workshop is at full capacity (39/40 taken)\n=========================== short test summary info ===========================\nFAILED tests\\test_checkin.py::test_last_seat_is_admitted - checkin.Registrati...\n1 failed, 8 passed in 0.06s\n",
+  "stderr": ""
+}

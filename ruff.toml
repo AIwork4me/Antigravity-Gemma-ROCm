@@ -4,6 +4,8 @@ extend-exclude = [
     "scenarios",           # agent task fixtures: their bytes are hashed evidence
     "demo_workspace",      # runtime state, regenerated from pristine
     "demo_workspace_pristine",
+    "devfest_workspace",           # runtime state, regenerated from pristine
+    "devfest_workspace_pristine",  # frozen scenario bytes are hashed evidence
     "artifacts",
     "build",
     "dist",

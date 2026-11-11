@@ -1,0 +1,25 @@
+{
+  "run_id": "devfest-2",
+  "model": "gemma4:26b",
+  "elapsed_s": 107.0,
+  "n_tool_calls": 5,
+  "tool_names": [
+    "view_file",
+    "view_file",
+    "run_command",
+    "edit_file",
+    "run_command"
+  ],
+  "ok": true,
+  "bug_present_before": true,
+  "bug_fixed_after": true,
+  "tests_tampered": false,
+  "forbidden_changed": [],
+  "disk_drift": [],
+  "files_changed": [
+    "checkin.py"
+  ],
+  "wall_s": 108.0,
+  "gpu_backend": "ROCm VERIFIED",
+  "model_digest": "001e5dafc3c77684c2307ebc6ab8e336e10c9b18eca52acf547d72fc83c3ca8c"
+}

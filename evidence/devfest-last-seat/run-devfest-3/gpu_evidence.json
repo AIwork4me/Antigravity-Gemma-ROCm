@@ -1,0 +1,13 @@
+{
+  "model": "gemma4:26b",
+  "resident": true,
+  "digest": "001e5dafc3c77684c2307ebc6ab8e336e10c9b18eca52acf547d72fc83c3ca8c",
+  "size_vram": 2919298496,
+  "size": 2919298496,
+  "gpu_100pct": true,
+  "rocm_dll_processes": [
+    "131324"
+  ],
+  "backend": "ROCm VERIFIED",
+  "ollama_ps_text": "NAME          ID              SIZE      PROCESSOR    CONTEXT    RUNNER      UNTIL               \ngemma4:26b    001e5dafc3c7    2.9 GB    100% GPU     262144     llamacpp    29 minutes from now"
+}

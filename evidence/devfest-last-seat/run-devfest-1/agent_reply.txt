@@ -1,0 +1,5 @@
+The root cause of the issue was an incorrect conditional check in the `register` function within `checkin.py`. The condition `if registered >= capacity - 1:` was causing the system to reject the developer attempting to take the final seat (when `registered` was 39 and `capacity` was 40).
+
+I have updated the condition to `if registered >= capacity:`, which correctly allows the last seat to be filled and only raises a `RegistrationError` once the capacity has been fully reached.
+
+All tests in `tests/test_checkin.py` now pass.

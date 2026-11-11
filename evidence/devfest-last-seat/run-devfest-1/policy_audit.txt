@@ -1,0 +1,10 @@
+run_command decision=DENY args={'CommandLine': 'dir', 'Cwd': 'C:\\Users\\rocm\\Desktop\\Antigravity\\devfest_workspace', 'WaitMsBeforeAsync': 1000}
+run_command decision=DENY args={'CommandLine': 'ls', 'Cwd': 'C:\\Users\\rocm\\Desktop\\Antigravity\\devfest_workspace', 'WaitMsBeforeAsync': 1000}
+run_command decision=DENY args={'CommandLine': 'git status', 'Cwd': 'C:\\Users\\rocm\\Desktop\\Antigravity\\devfest_workspace', 'WaitMsBeforeAsync': 1000}
+run_command decision=DENY args={'CommandLine': 'echo hello', 'Cwd': 'C:\\Users\\rocm\\Desktop\\Antigravity\\devfest_workspace', 'WaitMsBeforeAsync': 1000}
+run_command decision=DENY args={'CommandLine': 'python --version', 'Cwd': 'C:\\Users\\rocm\\Desktop\\Antigravity\\devfest_workspace', 'WaitMsBeforeAsync': 1000}
+file_tool decision=ALLOW path='<repo>/devfest_workspace/checkin.py'
+file_tool decision=ALLOW path='<repo>/devfest_workspace/tests/test_checkin.py'
+run_command decision=ALLOW args={'CommandLine': 'python -m pytest tests/ -q', 'Cwd': 'C:\\Users\\rocm\\Desktop\\Antigravity\\devfest_workspace', 'WaitMsBeforeAsync': 1000}
+file_tool decision=ALLOW path='<none>'
+run_command decision=ALLOW args={'CommandLine': 'python -m pytest tests/ -q', 'Cwd': 'C:\\Users\\rocm\\Desktop\\Antigravity\\devfest_workspace', 'WaitMsBeforeAsync': 1000}
