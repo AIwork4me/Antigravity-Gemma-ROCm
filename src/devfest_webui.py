@@ -1039,8 +1039,10 @@ font-size:13px;color:var(--dim)}
 .chip.ok b{color:var(--green)}.chip.bad b{color:#FF8A80}.chip.warn b{color:#FFE082}
 main{position:relative;z-index:1;flex:1;min-height:0;display:grid;grid-template-columns:46fr 54fr;gap:18px;
 padding:16px 30px;max-width:1920px;margin:0 auto;width:100%}
+/* panels scroll internally ONLY when content would otherwise be clipped
+   (e.g. small viewports); at 1920x1080 everything fits and no bar appears */
 .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 20px;
-position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+position:relative;overflow:auto;display:flex;flex-direction:column;min-height:0}
 .panel h2{margin:0 0 10px;font-size:14px;color:var(--dim);font-weight:700;letter-spacing:2px;text-transform:uppercase}
 /* six-act strip */
 .actstrip{display:flex;gap:4px;margin-bottom:10px}
@@ -1068,7 +1070,7 @@ margin-bottom:10px;min-height:86px}
 .seatnum .d{font-size:20px;color:var(--dim);font-weight:700}
 .seatnum.ok .n{color:var(--green)}
 .seatnum.bad .n{color:#FF8A80}
-.seatgrid{display:grid;grid-template-columns:repeat(10,38px);gap:5px;justify-content:center;flex:1}
+.seatgrid{display:grid;grid-template-columns:repeat(10,minmax(0,38px));gap:5px;justify-content:center;flex:1;min-width:0}
 .seat{aspect-ratio:1;border-radius:8px;display:flex;align-items:center;justify-content:center;
 font-size:12px;font-weight:700;color:#E8EAED;background:var(--card2);border:1px solid var(--line)}
 .seat.taken{background:#2E3A54;border-color:#3E5170}
@@ -1094,8 +1096,12 @@ background:linear-gradient(90deg,var(--blue),#7BAAF7);color:#fff}
 .verdict .why{display:block;color:var(--dim);font-size:13px;margin-top:4px}
 .verdict .why code{font-family:Consolas,monospace;color:inherit}
 /* celebration */
-#win{display:none;margin-top:12px;text-align:center;border:2px solid var(--green);border-radius:16px;
-padding:14px;background:linear-gradient(180deg,#12291B,#0F2416);position:relative;overflow:hidden}
+/* flex:none — the success card must NEVER be shrunk by the flex column
+   (its overflow:hidden for confetti would clip the Builder Pass internally);
+   on small viewports the PANEL scrolls instead */
+#win{display:none;flex:none;margin-top:12px;text-align:center;border:2px solid var(--green);
+border-radius:16px;padding:14px;background:linear-gradient(180deg,#12291B,#0F2416);
+position:relative;overflow:hidden}
 #win h3{margin:0;font-size:40px;font-weight:900;color:var(--green);letter-spacing:1px}
 #win .sm{color:#B9F6CA;font-size:14px;margin-top:3px}
 .badge-card{margin:12px auto 0;max-width:400px;border-radius:14px;padding:12px 16px;text-align:left;
@@ -1140,15 +1146,28 @@ padding:1px 9px;font-weight:800;font-size:10.5px}
 .tcard.edit{border-left-color:var(--yellow)}
 .tcard .pvtag,.pvtag{margin-left:8px;background:#0D243E;border:1px solid var(--blue);color:#8AB4F8;border-radius:6px;
 font-size:10.5px;padding:1px 7px;font-weight:800}
-/* developer view */
-.devsec{border-top:1px solid var(--line);padding-top:8px;margin-top:8px;min-height:0}
-.devsec h3{margin:0 0 6px;font-size:12px;color:var(--dim);font-weight:800;letter-spacing:1.5px;
+/* developer view: persistent header + tabbed technical workspace (grid-bounded,
+   each tab panel is its own scroller; hidden panels never affect sizing) */
+.devsec{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
+.devsec h3,.tabh{margin:0 0 6px;font-size:12px;color:var(--dim);font-weight:800;letter-spacing:1.5px;
 text-transform:uppercase}
 body[data-view="stage"] .devonly{display:none!important}
 body[data-view="dev"] .stageonly{display:none!important}
-body[data-view="dev"] #toolcards{flex:none;max-height:200px}
-.feed{display:flex;flex-direction:column;gap:6px;overflow-y:auto;padding-right:4px}
-#devfeed{flex:1;min-height:120px}
+.sdkstatus{font-size:13px;color:#B9F6CA;font-weight:700;margin:-2px 0 8px;min-height:18px;
+white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.workspace{flex:1;min-height:0;min-width:0;display:grid;grid-template-rows:auto minmax(0,1fr)}
+.tabbar{display:flex;gap:6px;flex-wrap:wrap}
+.tabbtn{background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:7px 18px;
+font-size:13px;font-weight:800;color:var(--dim);cursor:pointer;letter-spacing:.4px}
+.tabbtn:hover{border-color:var(--blue);color:var(--txt)}
+.tabbtn[aria-selected="true"]{background:#0D243E;border-color:var(--blue);color:#8AB4F8}
+.tabbtn:focus-visible{outline:3px solid var(--yellow)}
+.tabwrap{min-height:0;min-width:0;overflow:hidden;border:1px solid var(--line);border-radius:12px;
+background:#1E1E1E}
+.tabpanel{height:100%;min-height:0;min-width:0;overflow:auto;display:none;padding:10px 12px}
+.tabpanel.active{display:block}
+.tabnote{color:var(--dim);font-size:13px}
+.feed{display:flex;flex-direction:column;gap:6px;padding-right:4px}
 .ev{border:1px solid var(--line);border-left:3px solid var(--blue);border-radius:9px;
 padding:6px 10px;font-size:12.5px;background:var(--card2);animation:pop .18s}
 .ev .t{color:var(--dim);margin-right:8px;font-family:Consolas,monospace;font-size:11px}
@@ -1157,7 +1176,7 @@ padding:6px 10px;font-size:12.5px;background:var(--card2);animation:pop .18s}
 .ev.stage{border-left-color:#A78BFA}
 .ev.sdk{border-left-color:var(--green);color:#B9F6CA}
 .ev.pv{outline:2px dashed var(--blue)}
-.pyrow{display:flex;gap:10px;margin:4px 0;flex-wrap:wrap}
+.pyrow{display:flex;gap:10px;margin:4px 0 4px;flex-wrap:wrap}
 .pybox{flex:1;min-width:180px;background:#1E1E1E;border:1px solid var(--line);border-radius:12px;
 padding:8px 12px;font-size:13px}
 .pybox .lab{color:var(--dim);font-size:11.5px;display:block;margin-bottom:3px}
@@ -1165,10 +1184,10 @@ padding:8px 12px;font-size:13px}
 .rbadge.red{background:#3B0E0A;color:#FF8A80}.rbadge.green{background:#10331F;color:#B9F6CA}
 .rbadge.gray{background:#2D2D2D;color:var(--dim)}
 #diff{font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap;background:#141414;
-border:1px solid var(--line);border-radius:10px;padding:10px;max-height:180px;overflow:auto;display:none}
+border:1px solid var(--line);border-radius:10px;padding:10px;display:none}
 #diff .a{color:#FF8A80}#diff .b{color:#B9F6CA}#diff .h{color:var(--dim)}
 #tokens{font-family:Consolas,monospace;font-size:12px;color:#C9D1D9;white-space:pre-wrap;
-background:#141414;border:1px solid var(--line);border-radius:10px;padding:10px;height:110px;overflow-y:auto}
+background:#141414;border:1px solid var(--line);border-radius:10px;padding:10px}
 #gpudetail{font-size:12.5px;color:var(--dim);line-height:1.6}
 #gpudetail b{color:#E8EAED}
 #devsum{font-size:12.5px;color:var(--dim);line-height:1.6;min-height:20px}
@@ -1262,16 +1281,6 @@ body{overflow:auto}}
    <div class="pvwmark" id="pvwmark">PREVIEW · 模拟画面 · 非真实结果</div>
    <div class="rpwmark" id="rpwmark">REPLAY · 历史回放 · 非本次运行</div>
   </div>
-  <div class="devonly" style="flex:1;min-height:0;display:flex;flex-direction:column">
-   <div class="devsec"><h3>独立 pytest（子进程，冻结测试）</h3>
-    <div class="pyrow">
-     <div class="pybox"><span class="lab">修复前（预期红）</span><span id="py_before"><span class="rbadge gray">未运行</span></span> <span id="pyb_tail" style="color:var(--dim);font-size:11.5px"></span></div>
-     <div class="pybox"><span class="lab">修复后（预期全绿）</span><span id="py_after"><span class="rbadge gray">未运行</span></span> <span id="pya_tail" style="color:var(--dim);font-size:11.5px"></span></div>
-    </div>
-   </div>
-   <div class="devsec"><h3>运行摘要</h3><div id="devsum">（运行后显示：验收、文件、SHA256、耗时）</div></div>
-   <div class="devsec" style="flex:1;min-height:0"><h3>GPU 证据（诚实口径）</h3><div id="gpudetail">（运行后显示）</div></div>
-  </div>
  </section>
  <section class="panel">
   <div class="sdkhead"><h2>Google Antigravity SDK — Live Agent Execution</h2>
@@ -1287,13 +1296,38 @@ body{overflow:auto}}
    <button class="bigbtn" id="runbtn" onclick="doRun()">▶ Give Mission to Antigravity</button>
    <button class="smbtn" onclick="showEvidence()">🗂 验证证据</button>
   </div>
+  <div id="sdkstatus" class="devonly sdkstatus" aria-live="polite">等待任务…（当前 Agent 状态实时更新）</div>
   <div id="toolcards" class="stageonly" aria-live="polite"></div>
-  <div class="devonly" style="flex:1;min-height:0;display:flex;flex-direction:column">
-   <div class="devsec"><h3>SDK 生命周期 + 工具事件（真实流）</h3>
-    <div class="feed" id="devfeed" aria-live="polite"><div class="ev stage"><span class="t">--:--:--</span>等待启动…</div></div>
+  <div class="devonly workspace" id="devworkspace">
+   <div class="tabbar" role="tablist" aria-label="技术工作区" onkeydown="tablistKey(event)">
+    <button class="tabbtn" id="tab-sdk" role="tab" aria-selected="true" aria-controls="panel-sdk" tabindex="0" onclick="setTab('sdk')">SDK Timeline</button>
+    <button class="tabbtn" id="tab-diff" role="tab" aria-selected="false" aria-controls="panel-diff" tabindex="-1" onclick="setTab('diff')">Code Diff</button>
+    <button class="tabbtn" id="tab-out" role="tab" aria-selected="false" aria-controls="panel-out" tabindex="-1" onclick="setTab('out')">Model Output</button>
+    <button class="tabbtn" id="tab-ev" role="tab" aria-selected="false" aria-controls="panel-ev" tabindex="-1" onclick="setTab('ev')">Evidence</button>
    </div>
-   <div class="devsec"><h3>Agent Diff（仅白名单源文件）</h3><div id="diff"></div></div>
-   <div class="devsec"><h3>模型输出（流式）</h3><div id="tokens">（运行后显示）</div></div>
+   <div class="tabwrap">
+    <div class="tabpanel active" id="panel-sdk" role="tabpanel" aria-labelledby="tab-sdk">
+     <div class="feed" id="devfeed" aria-live="polite"><div class="ev stage"><span class="t">--:--:--</span>等待启动…</div></div>
+    </div>
+    <div class="tabpanel" id="panel-diff" role="tabpanel" aria-labelledby="tab-diff">
+     <h3 class="tabh">Agent Diff（仅白名单源文件）</h3>
+     <div id="diffnote" class="tabnote">等待真实运行 — LIVE 运行后在此显示白名单 diff。</div>
+     <div id="diff"></div>
+    </div>
+    <div class="tabpanel" id="panel-out" role="tabpanel" aria-labelledby="tab-out">
+     <h3 class="tabh">模型输出（流式）</h3>
+     <div id="tokens">（运行后显示）</div>
+    </div>
+    <div class="tabpanel" id="panel-ev" role="tabpanel" aria-labelledby="tab-ev">
+     <h3 class="tabh">独立验收证据</h3>
+     <div class="pyrow">
+      <div class="pybox"><span class="lab">修复前（预期红）</span><span id="py_before"><span class="rbadge gray">未运行</span></span> <span id="pyb_tail" style="color:var(--dim);font-size:11.5px"></span></div>
+      <div class="pybox"><span class="lab">修复后（预期全绿）</span><span id="py_after"><span class="rbadge gray">未运行</span></span> <span id="pya_tail" style="color:var(--dim);font-size:11.5px"></span></div>
+     </div>
+     <div class="devsec"><h3>运行摘要</h3><div id="devsum">（运行后显示：验收、文件、SHA256、耗时）</div></div>
+     <div class="devsec"><h3>GPU 证据（诚实口径）</h3><div id="gpudetail">（运行后显示）</div></div>
+    </div>
+   </div>
   </div>
   <details class="magic stageonly">
    <summary>✨ Behind the Magic — 真实 SDK 核心调用（与仓库一致）</summary>
@@ -1398,7 +1432,27 @@ function setMode(m){mode=m;
  el('previewbanner').style.display=(m==='preview')?'block':'none';
  if(won){el('rpwmark').style.display=(m==='replay')?'flex':'none';
   el('pvwmark').style.display=(m==='preview')?'flex':'none';}
+ // a replay/preview page never runs a live business probe from its own UI
+ el('regbtn').disabled=(m==='live')?false:true;
  txt('f_mode','模式 '+(m==='live'?'LIVE':m==='replay'?'RECORDED RUN / REPLAY':'DESIGN PREVIEW'));}
+/* ---- developer workspace tabs: switch display only; SSE keeps flowing,
+   history/scroll preserved, and follow-the-tail respects manual scrolling ---- */
+const TABS=['sdk','diff','out','ev'];
+const tabState={};TABS.forEach(id=>tabState[id]={sticky:true,savedTop:0});
+function panelEl(id){return el('panel-'+id);}
+function setTab(id){TABS.forEach(tid=>{const b=el('tab-'+tid),p=panelEl(tid);if(!b||!p)return;
+  const on=tid===id;b.setAttribute('aria-selected',on?'true':'false');b.tabIndex=on?0:-1;
+  if(on){if(!p.classList.contains('active')){p.classList.add('active');
+    p.scrollTop=tabState[tid].sticky?p.scrollHeight:tabState[tid].savedTop;}}
+  else if(p.classList.contains('active')){tabState[tid].savedTop=p.scrollTop;p.classList.remove('active');}});}
+function tablistKey(e){let n=null;const cur=TABS.indexOf((document.querySelector('.tabbtn[aria-selected="true"]')||{}).id?document.querySelector('.tabbtn[aria-selected="true"]').id.slice(4):0);
+ if(e.key==='ArrowRight')n=(cur+1)%TABS.length;else if(e.key==='ArrowLeft')n=(cur-1+TABS.length)%TABS.length;
+ else if(e.key==='Home')n=0;else if(e.key==='End')n=TABS.length-1;
+ if(n!==null){e.preventDefault();setTab(TABS[n]);el('tab-'+TABS[n]).focus();}}
+function initTabs(){TABS.forEach(id=>{const p=panelEl(id);if(!p)return;
+ p.addEventListener('scroll',()=>{tabState[id].sticky=(p.scrollHeight-p.scrollTop-p.clientHeight<40);});});setTab('sdk');}
+function followAppend(panelId){const p=panelEl(panelId);if(!p||!p.classList.contains('active'))return;
+ if(tabState[panelId].sticky)p.scrollTop=p.scrollHeight;}
 function addToolCard(d){
  const box=el('toolcards');const name=d.name||'?';
  const c=document.createElement('div');c.className='tcard'+((name==='edit_file'||name==='create_file'||name==='replace_file_content')?' edit':'');
@@ -1419,7 +1473,7 @@ function addToolCard(d){
 function addEv(node,cls,pv){const f=el('devfeed');if(!f)return;
  const d=document.createElement('div');d.className='ev '+(cls||'')+(pv?' pv':'');
  d.appendChild(node);if(pv){const t=document.createElement('span');t.className='pvtag';t.textContent='预览';d.appendChild(t);}
- f.appendChild(d);while(f.children.length>150)f.removeChild(f.firstChild);f.scrollTop=f.scrollHeight;}
+ f.appendChild(d);while(f.children.length>150)f.removeChild(f.firstChild);followAppend('sdk');}
 function row(parts,pv){const r=document.createElement('span');parts.forEach(p=>{if(typeof p==='string'){r.appendChild(document.createTextNode(p));}
  else{const b=document.createElement('b');if(p.cls)b.className=p.cls;b.textContent=p.b;r.appendChild(b);}});addEv(r,undefined,pv);return r;}
 function tsSpan(){const s=document.createElement('span');s.className='t';s.textContent=new Date().toLocaleTimeString();return s;}
@@ -1468,7 +1522,7 @@ function celebrate(name,identity){
  el('pvwmark').style.display=(identity==='preview')?'flex':'none';
  if(identity==='live'&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches){confetti();}
  el('runbtn').disabled=false;
- el('regbtn').disabled=false;}
+ el('regbtn').disabled=(mode==='live')?false:true;}
 function clearWin(){won=false;el('win').style.display='none';
  el('pvwmark').style.display='none';el('rpwmark').style.display='none';
  el('seatnum').className='seatnum bad';txt('seattaken','39');}
@@ -1546,12 +1600,14 @@ function connect(){es=new EventSource('/api/stream');
  es.addEventListener('replay_done',()=>{ /* stay REPLAY — a finished replay never re-badges as LIVE */
   txt('replaybanner','🔁 REPLAY — 回放结束：以上为历史运行结果（保持 RECORDED RUN 身份，直到新的真实 LIVE 运行开始）。');
   el('runbtn').disabled=true;refresh();});
- es.addEventListener('story',e=>{const d=JSON.parse(e.data);setStory(d.stage,d.preview);});
+ es.addEventListener('story',e=>{const d=JSON.parse(e.data);setStory(d.stage,d.preview);
+  if(d.act)txt('sdkstatus','🔹 '+d.act+' · '+d.title);});
  es.addEventListener('sdk',e=>{const d=JSON.parse(e.data);
   const LABEL={agent_config_ready:'Agent 配置就绪（策略链锁定）',agent_session_started:'Agent 会话已创建（真实 SDK）',
   mission_submitted:'任务已提交（agent.chat）',agent_response_completed:'Agent 响应完成',
   independent_verification_started:'独立验证开始',independent_verification_completed:'独立验证完成',
   business_probe_started:'业务探针启动',business_outcome_verified:'业务结果验证'};
+  txt('sdkstatus','◈ '+(LABEL[d.phase]||d.phase)+(d.ok===true?' → PASS':d.ok===false?' → FAIL':''));
   const r=document.createElement('span');r.appendChild(tsSpan());
   r.appendChild(document.createTextNode('◈ '));
   const b=document.createElement('b');b.textContent=LABEL[d.phase]||d.phase;r.appendChild(b);
@@ -1561,6 +1617,7 @@ function connect(){es=new EventSource('/api/stream');
   r.appendChild(tsSpan());r.appendChild(document.createTextNode('🔹 '+s.text));addEv(r,'stage',s.preview);});
  es.addEventListener('tool',e=>{const d=JSON.parse(e.data);
   addToolCard(d);
+  txt('sdkstatus','🔧 '+d.name+' · '+(d.status||'observed')+(d.seq?' · #'+d.seq:''));
   const r=document.createElement('span');r.appendChild(tsSpan());
   r.appendChild(document.createTextNode((ICON[d.name]||'🔧')+' '));
   const b=document.createElement('b');b.textContent=d.name;r.appendChild(b);
@@ -1573,7 +1630,7 @@ function connect(){es=new EventSource('/api/stream');
   r.appendChild(document.createTextNode(' '+(s.split('args=')[1]||'')));addEv(r,'policy',String(s).includes('预览'));});
  const tk=el('tokens');
  es.addEventListener('token',e=>{const s=document.createElement('span');s.textContent=JSON.parse(e.data);
-  tk.appendChild(s);tk.scrollTop=tk.scrollHeight;});
+  tk.appendChild(s);followAppend('out');});
  es.addEventListener('pytest',e=>{const d=JSON.parse(e.data);setPy(d.phase,d.exit,d.tail,d.preview);});
  es.addEventListener('gpu',e=>{const d=JSON.parse(e.data);const chip=el('f_gpu');
   chip.className='gpuchip'+(d.backend==='ROCm VERIFIED'?' verified':'');
@@ -1584,6 +1641,7 @@ function connect(){es=new EventSource('/api/stream');
   if(d.phase==='post')gpuDetail(d);});
  es.addEventListener('diff',e=>{const d=JSON.parse(e.data);if(!d.patch)return;
   const box=el('diff');box.style.display='block';
+  const note=el('diffnote');if(note)note.style.display='none';
   box.innerHTML=d.patch.split('\\n').map(l=>
    l.startsWith('+')?`<span class="b">${esc(l)}</span>`:
    l.startsWith('-')?`<span class="a">${esc(l)}</span>`:
@@ -1592,11 +1650,14 @@ function connect(){es=new EventSource('/api/stream');
  es.addEventListener('done',e=>{const d=JSON.parse(e.data);running=false;
   const parts=[];
   const sum=el('devsum');sum.textContent='';
-  if(d.preview){parts.push({b:'◈ 设计预览结束',cls:''},d.note||'');txt('devsum','设计预览 — 不产生验收摘要（真实运行显示：验收、文件、SHA256、耗时）');}
+  if(d.preview){parts.push({b:'◈ 设计预览结束',cls:''},d.note||'');txt('devsum','设计预览 — 不产生验收摘要（真实运行显示：验收、文件、SHA256、耗时）');
+   txt('sdkstatus','◈ 设计预览结束 — 非真实运行');}
   else if(d.ok){parts.push({b:'✅ 任务成功',cls:''},' — 独立验证全绿，变更文件：'+((d.files_changed||[]).join(', ')||'(无)'),
    ' · 耗时 '+(d.elapsed_s||'?')+'s · 工具调用 '+(d.n_tool_calls||0)+' 次');
+   txt('sdkstatus','✅ 任务成功 — 独立验证全绿（'+(d.elapsed_s||'?')+'s · '+(d.n_tool_calls||0)+' 次工具调用）');
    el('runbtn').disabled=false;}
   else{parts.push({b:'⚠️ 未通过独立验收',cls:''},' '+(d.tests_tampered?'测试被改动 → 拒绝':(d.forbidden_changed&&d.forbidden_changed.length)?'白名单外文件被改：'+d.forbidden_changed.join(','):'未完成修复'));
+   txt('sdkstatus','⚠️ 未通过独立验收 — 不显示成功');
    clearWin();el('runbtn').disabled=false;}
   row(parts,d.preview);
   if(!d.preview&&sum){
@@ -1609,12 +1670,15 @@ function connect(){es=new EventSource('/api/stream');
     sum.appendChild(pre);}}});
  es.addEventListener('error',e=>{if(!e.data)return;
   try{const d=JSON.parse(e.data);const r=document.createElement('span');r.appendChild(tsSpan());
-  r.appendChild(document.createTextNode('⚠️ '+(d.message||'run error')));addEv(r,'stage');running=false;clearWin();el('runbtn').disabled=false;}catch(_){}});}
-buildSeats();buildActs();setMode('live');refresh();connect();setInterval(refresh,5000);
+  r.appendChild(document.createTextNode('⚠️ '+(d.message||'run error')));addEv(r,'stage');
+  txt('sdkstatus','⚠️ '+(d.message||'运行错误'));
+  running=false;clearWin();el('runbtn').disabled=false;}catch(_){}});}
+buildSeats();buildActs();setMode('live');initTabs();refresh();connect();setInterval(refresh,5000);
 (async()=>{try{const s=await (await fetch('/api/status')).json();
  let d;
  if(!s.workspace_has_engine){const rr=await (await fetch('/api/reset',{method:'POST'})).json();d=rr;}
- else{d=await (await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"name":"Guest Developer"}'})).json();}
+ else if(s.mode==='live'){ // replay/preview pages keep their recorded identity; no live probe on load
+  d=await (await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"name":"Guest Developer"}'})).json();}
  if(d&&!d.error)applyProbe(d,d.name||'Guest Developer');}catch(e){}})();
 </script></body></html>"""
 

@@ -142,10 +142,46 @@ DLL（tasklist /m）——绝不引用可能过期的 server.log。
   按钮，以及右侧 **Google Antigravity SDK — Live Agent Execution** 面板
   （管线、动态工具卡片、Behind the Magic 代码）。1920×1080 无纵向滚动；
   支持 `prefers-reduced-motion`；可键盘操作。
-- **DEVELOPER VIEW** —— 给工程师：SDK 生命周期 + 工具事件流、策略
-  ALLOW/DENY 审计、pytest 前后、白名单 diff、模型输出流、带 SHA256 的
-  运行摘要、分来源标注的 GPU 证据。
-- 切换视图只影响显示：绝不打断 Agent 运行、事件记录或验证。
+- **DEVELOPER VIEW** —— 持久头部（SDK 标题、管线、实时 Agent 状态行、
+  任务按钮）+ **四 Tab 技术工作区**：`SDK Timeline`（默认）· `Code Diff`
+  · `Model Output` · `Evidence`（pytest 前后、运行摘要 + SHA256、GPU 证
+  据）。同一时间只显示一个内容区；每个 Tab 面板都是独立受限滚动容器，
+  长日志/长 diff/长输出再也不会互相挤压或重叠。
+- 切换视图或 Tab 只影响显示：绝不打断 Agent 运行、绝不重开 SSE、不丢历
+  史（单一 EventSource 持续接收；滚动位置保留，只有当你滚回底部时才恢
+  复自动跟随）。Tab 支持键盘操作（←/→/Home/End），正确维护
+  `aria-selected`/`tabindex`。
+- 开发者视图中的成功态完整显示 YOU'RE IN! 与 Builder Pass；小视口下面板
+  滚动而非裁切（徽章始终可达），已验证到 1280×720。
+
+### 开发者视图布局修复（V3）—— 根因与设计
+
+在 1704×864 上报告了两个 bug（右面板重叠；Builder Pass 被裁），修复前
+先在真实浏览器中定位：
+
+- **右面板重叠**：SDK 事件流的 `flex:1` 写在非 flex 的 `.devsec` 父容器
+  里，导致无界增长（压力回放下实测 5715px）；同时兄弟区块被 flex-shrink
+  压到内容之下、以可见溢出互相叠压，最后被面板 `overflow:hidden` 裁掉。
+  修复：工作区改为 `display:grid; grid-template-rows:auto minmax(0,1fr)`；
+  每个 Tab 面板 `height:100%; min-height:0; overflow:auto` —— 任何元素
+  都逃不出自己的盒子，隐藏的 Tab 零布局足迹。
+- **Builder Pass 裁切**：`#win`（为纸屑动画使用 `overflow:hidden`）自身
+  被左面板 flex 压缩，把徽章裁在了内部——面板滚动根本救不到。修复：
+  `#win{flex:none}` 保持固有高度；`.panel{overflow:auto}` 让小视口的溢出
+  变为可滚动的可达内容。座位格列改为 `minmax(0,38px)`，在 1366×768 下
+  干净收缩而不再把面板撑宽 37px。
+- **回放页**：回放/预览页加载时不再执行启动业务探针（此前会把回放出的
+  庆祝态冲掉），非 LIVE 模式下报名按钮保持禁用。
+
+**自动化视觉回归**（`tests/test_devfest_devview_layout.py`，Playwright
+驱动本机 Chromium 系通道）：五个视口（1920×1080、1704×864、1366×768、
+1280×720、1536×864=1080p@125% 缩放）× 四个 Tab 的 `getBoundingClientRect`
+几何断言（面板有界、无横向溢出、页脚不遮挡、徽章可见/可滚动到达、隐藏
+Tab 零尺寸），外加 Tab 状态保持 + 单一 EventSource、键盘导航、滚动跟随
+语义、回放身份重载存活、舞台视图回归、Agent 错误态与 DESIGN PREVIEW。
+夹具为确定性 REPLAY 录制（100 条工具事件、100 条策略行、超长参数、300
+行 diff、200 段中英混排 token）—— 仅用于 UI 测试，绝不冒充 LIVE。无浏
+览器的 CI 跳过该模块；参考 Windows 机实跑（8/8 通过）。
 
 ## Antigravity SDK 可见性（V2 的核心）
 
@@ -293,6 +329,14 @@ powershell -ExecutionPolicy Bypass -File scripts\start-devfest-demo.ps1 -SkipWar
 | `docs/assets/v2-06-replay.png` | REPLAY —— 回放结束后保持 RECORDED RUN 身份 + 水印 |
 | `docs/assets/devfest-last-seat-v2.gif` | 由真实事件录制渲染的剧情弧 GIF |
 | `docs/assets/last-seat-recording.json` | 真实录制的事件流（回放兜底用） |
+| `docs/assets/developer-before-fix.png` | （V3）修复前 —— 右面板重叠（压力回放，1920×1080） |
+| `docs/assets/developer-before-fix-1704-badge-clip.png` | （V3）修复前 —— 1704×864 徽章被裁 |
+| `docs/assets/developer-sdk-timeline-fixed.png` | （V3）修复后 —— SDK Timeline（真实运行） |
+| `docs/assets/developer-code-diff-fixed.png` | （V3）修复后 —— Code Diff（真实运行） |
+| `docs/assets/developer-model-output-fixed.png` | （V3）修复后 —— Model Output（真实运行） |
+| `docs/assets/developer-evidence-fixed.png` | （V3）修复后 —— Evidence（真实运行） |
+| `docs/assets/developer-builder-pass-fixed.png` | （V3）修复后 —— 1704×864 完整 Builder Pass |
+| `docs/assets/stage-view-regression.png` | （V3）布局修复后舞台视图无回归 |
 
 ## 验证与证据
 

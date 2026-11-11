@@ -136,13 +136,58 @@ any success state.
   narration, seat board, register button, and the right-side
   **Google Antigravity SDK — Live Agent Execution** panel (pipeline,
   dynamic tool cards, Behind-the-Magic snippet). Fits 1920×1080 with no
-  page scroll; honors `prefers-reduced-motion`; keyboard-operable.
-- **DEVELOPER VIEW** — for engineers: SDK lifecycle + tool events feed,
-  policy ALLOW/DENY audit lines, pytest before/after, whitelisted diff,
-  model output stream, run summary with SHA256, and GPU evidence with
-  per-source memory labels.
-- Switching views is display-only: it never interrupts the agent run,
-  event recording, or verification.
+  page scroll; honors `prefers-reduced-motion`; keyboard operable.
+- **DEVELOPER VIEW** — a persistent header (SDK title, pipeline, live
+  agent-status line, mission button) plus a **tabbed technical
+  workspace**: `SDK Timeline` (default) · `Code Diff` · `Model Output` ·
+  `Evidence` (pytest before/after, run summary + SHA256, GPU evidence).
+  Exactly one tab is visible at a time; each tab panel is its own bounded
+  scroller, so long logs/diffs/tokens never squeeze or overlap each other.
+- Switching views or tabs is display-only: it never interrupts the agent
+  run, re-opens the SSE stream, or loses history (a single EventSource
+  keeps flowing; scroll position is preserved, and follow-the-tail
+  resumes only after you scroll back to the bottom). Tabs are keyboard
+  operable (←/→/Home/End) with proper `aria-selected`/`tabindex`.
+- Success in Developer View shows the full YOU'RE IN! card and Builder
+  Pass; on small viewports the panel scrolls instead of clipping (the
+  badge is always reachable), verified down to 1280×720.
+
+### Developer View layout fix (V3) — root causes & design
+
+Two bugs were reported at 1704×864 (overlap in the right panel; Builder
+Pass clipped) and diagnosed in a real browser before fixing:
+
+- **Right-panel overlap**: the SDK feed's `flex:1` sat inside a
+  non-flex `.devsec` parent, so it grew unbounded (measured 5715px under
+  a stress replay) while sibling sections were flex-shrunk below their
+  content, overflowing over each other; the panel's `overflow:hidden`
+  then clipped the rest. Fix: the workspace is now
+  `display:grid; grid-template-rows:auto minmax(0,1fr)`; each tab panel
+  is `height:100%; min-height:0; overflow:auto` — no element can escape
+  its box, and hidden tabs have zero layout footprint.
+- **Builder Pass clipped**: `#win` (which uses `overflow:hidden` for the
+  confetti) was itself flex-shrunk inside the left panel, cropping the
+  badge internally where panel scrolling could not reach it. Fix:
+  `#win{flex:none}` keeps its intrinsic height; `.panel{overflow:auto}`
+  turns any small-viewport overflow into a reachable scroll.
+  Seat-grid columns became `minmax(0,38px)` so they shrink cleanly at
+  1366×768 instead of pushing the panel 37px wide.
+- **Replay pages**: loading a replay/preview page no longer runs the
+  startup business probe (it used to overwrite the replayed
+  celebration), and the register button stays disabled outside LIVE.
+
+**Automated visual regression** (`tests/test_devfest_devview_layout.py`,
+Playwright over a local Chromium-family channel): five viewports
+(1920×1080, 1704×864, 1366×768, 1280×720, 1536×864 = 1080p at 125% zoom)
+× four tabs with `getBoundingClientRect` assertions (panels bounded, no
+horizontal overflow, footer clear, badge visible/scrollable, hidden tabs
+inert), tab state preservation + single-EventSource check, keyboard
+navigation, scroll-follow semantics, replay-identity reload survival,
+stage-view regression, agent error state, and DESIGN PREVIEW. Fixtures
+are deterministic REPLAY recordings (100 tool events, 100 policy lines,
+long args, a 300-line diff, 200 mixed zh/en tokens) — test-only, never
+LIVE data. CI without a browser skips this module; the reference Windows
+machine runs it for real (8/8).
 
 ## Antigravity SDK visibility (why V2 exists)
 
@@ -305,6 +350,14 @@ All captured from real LIVE/REPLAY runs on the reference machine at
 | `docs/assets/v2-06-replay.png` | REPLAY — finished replay keeps its RECORDED RUN identity + watermark |
 | `docs/assets/devfest-last-seat-v2.gif` | story-arc GIF rendered from the real event recording |
 | `docs/assets/last-seat-recording.json` | the real recorded event stream (replay fallback) |
+| `docs/assets/developer-before-fix.png` | (V3) right-panel overlap before the fix — stress replay, 1920×1080 |
+| `docs/assets/developer-before-fix-1704-badge-clip.png` | (V3) Builder Pass clipped at 1704×864 before the fix |
+| `docs/assets/developer-sdk-timeline-fixed.png` | (V3) SDK Timeline tab after the fix — real run |
+| `docs/assets/developer-code-diff-fixed.png` | (V3) Code Diff tab — real run |
+| `docs/assets/developer-model-output-fixed.png` | (V3) Model Output tab — real run |
+| `docs/assets/developer-evidence-fixed.png` | (V3) Evidence tab (pytest/SHA256/GPU) — real run |
+| `docs/assets/developer-builder-pass-fixed.png` | (V3) full Builder Pass at 1704×864 after the fix |
+| `docs/assets/stage-view-regression.png` | (V3) stage view unchanged after the layout fix |
 
 ## Verification & evidence
 

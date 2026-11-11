@@ -763,6 +763,42 @@ class TestClientRendering:
         assert "STAGE VIEW" in page and "DEVELOPER VIEW" in page
         assert "setView" in page
 
+    def test_devview_tabbed_workspace_structure(self):
+        """V3 layout fix: the developer workspace is a tablist of four panels,
+        each tab controlling exactly one panel id (aria wiring)."""
+        page = dw.PAGE
+        assert 'role="tablist"' in page and "tablistKey" in page
+        for tid in ("sdk", "diff", "out", "ev"):
+            assert f'id="tab-{tid}"' in page
+            assert f'id="panel-{tid}"' in page
+            assert f'aria-controls="panel-{tid}"' in page
+        assert 'id="tab-sdk" role="tab" aria-selected="true"' in page
+        assert "SDK Timeline" in page and "Code Diff" in page
+        assert "Model Output" in page and "Evidence" in page
+
+    def test_devview_workspace_css_bounds(self):
+        """The workspace grid + tab panels carry the size-bounding properties
+        that prevent the old overlap (grid minmax(0,1fr), panel scrollers)."""
+        page = dw.PAGE
+        assert "grid-template-rows:auto minmax(0,1fr)" in page
+        assert ".tabpanel{height:100%;min-height:0;min-width:0;overflow:auto" in page
+        assert ".tabwrap{min-height:0;min-width:0;overflow:hidden" in page
+        # evidence moved into the Evidence tab; nothing dev-only stays in the left panel
+        assert "panel-ev" in page and "gpudetail" in page.split("panel-ev", 1)[1][:2000]
+
+    def test_devview_current_agent_status_line(self):
+        page = dw.PAGE
+        assert 'id="sdkstatus"' in page
+        assert "txt('sdkstatus'" in page
+
+    def test_replay_page_never_runs_startup_probe(self):
+        """A replay/preview page keeps its recorded identity on load — the
+        bootstrap register only runs in LIVE mode, and the register button is
+        disabled outside LIVE."""
+        page = dw.PAGE
+        assert "else if(s.mode==='live')" in page
+        assert "el('regbtn').disabled=(m==='live')?false:true" in page
+
     def test_six_acts_defined(self):
         for act in ("PROBLEM", "MISSION", "INVESTIGATION", "FIX", "CHECK", "CELEBRATION"):
             assert act in dw.PAGE
