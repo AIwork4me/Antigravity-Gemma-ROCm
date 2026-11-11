@@ -1,0 +1,5 @@
+The issue was in `checkin.py`, where the `register` function used the condition `if registered >= capacity - 1:` to check if the workshop was full. This caused the 40th person (when `registered` was 39 and `capacity` was 40) to be incorrectly rejected.
+
+I updated the condition to `if registered >= capacity:`, which correctly allows the last seat to be taken and only raises a `RegistrationError` when the capacity is fully reached.
+
+All tests in `tests/test_checkin.py` are now passing.

@@ -1,0 +1,13 @@
+diff --git "a/<repo>\\devfest_workspace_pristine\\checkin.py" "b/<repo>\\devfest_workspace\\checkin.py"
+index b42bc9b..9e4a8b2 100644
+--- "a/<repo>\\devfest_workspace_pristine\\checkin.py"
++++ "b/<repo>\\devfest_workspace\\checkin.py"
+@@ -43,7 +43,7 @@ def register(name: str, registered: int, capacity: int = CAPACITY) -> dict:
+     if not cleaned:
+         raise ValueError("registrant name must not be empty")
+     _check_counts(registered, capacity)
+-    if registered >= capacity - 1:
++    if registered >= capacity:
+         raise RegistrationError(
+             f"workshop is at full capacity ({registered}/{capacity} taken)"
+         )

@@ -1,0 +1,34 @@
+[
+  {
+    "name": "view_file",
+    "args": "{'file_path': '<repo>\\\\devfest_workspace\\\\checkin.py', 'start_line': 0, 'end_line': 799}"
+  },
+  {
+    "name": "view_file",
+    "args": "{'file_path': '<repo>\\\\devfest_workspace\\\\tests\\\\test_checkin.py', 'start_line': 0, 'end_line': 799}"
+  },
+  {
+    "name": "run_command",
+    "args": "{'command_line': 'python -m pytest tests/ -q', 'working_dir': '<repo>\\\\devfest_workspace'}"
+  },
+  {
+    "name": "edit_file",
+    "args": "{'file_path': '<repo>\\\\devfest_workspace\\\\checkin.py'}"
+  },
+  {
+    "name": "view_file",
+    "args": "{'file_path': '<repo>\\\\devfest_workspace\\\\checkin.py', 'start_line': 0, 'end_line': 799}"
+  },
+  {
+    "name": "edit_file",
+    "args": "{'file_path': '<repo>\\\\devfest_workspace\\\\checkin.py'}"
+  },
+  {
+    "name": "edit_file",
+    "args": "{'file_path': '<repo>\\\\devfest_workspace\\\\checkin.py'}"
+  },
+  {
+    "name": "run_command",
+    "args": "{'command_line': 'python -m pytest tests/ -q', 'working_dir': '<repo>\\\\devfest_workspace'}"
+  }
+]

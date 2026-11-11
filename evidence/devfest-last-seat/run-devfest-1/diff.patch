@@ -1,0 +1,20 @@
+diff --git "a/<repo>\\devfest_workspace_pristine/__pycache__/checkin.cpython-313.pyc" "b/<repo>\\devfest_workspace/__pycache__/checkin.cpython-313.pyc"
+index d7ce393..5d001d1 100644
+Binary files "a/<repo>\\devfest_workspace_pristine/__pycache__/checkin.cpython-313.pyc" and "b/<repo>\\devfest_workspace/__pycache__/checkin.cpython-313.pyc" differ
+diff --git "a/<repo>\\devfest_workspace_pristine/checkin.py" "b/<repo>\\devfest_workspace/checkin.py"
+index b42bc9b..9e4a8b2 100644
+--- "a/<repo>\\devfest_workspace_pristine/checkin.py"
++++ "b/<repo>\\devfest_workspace/checkin.py"
+@@ -43,7 +43,7 @@ def register(name: str, registered: int, capacity: int = CAPACITY) -> dict:
+     if not cleaned:
+         raise ValueError("registrant name must not be empty")
+     _check_counts(registered, capacity)
+-    if registered >= capacity - 1:
++    if registered >= capacity:
+         raise RegistrationError(
+             f"workshop is at full capacity ({registered}/{capacity} taken)"
+         )
+diff --git "a/<repo>\\devfest_workspace/tests/__pycache__/test_checkin.cpython-313-pytest-9.1.1.pyc" "b/<repo>\\devfest_workspace/tests/__pycache__/test_checkin.cpython-313-pytest-9.1.1.pyc"
+new file mode 100644
+index 0000000..f2837a8
+Binary files /dev/null and "b/<repo>\\devfest_workspace/tests/__pycache__/test_checkin.cpython-313-pytest-9.1.1.pyc" differ

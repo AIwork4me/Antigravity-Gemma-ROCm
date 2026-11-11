@@ -1,0 +1,3 @@
+The issue was in the `register` function in `checkin.py`. The condition `if registered >= capacity - 1:` was incorrectly rejecting the last person when `registered` reached `capacity - 1` (i.e., 39 out of 40 seats taken). I changed the condition to `if registered >= capacity:` to correctly allow the final person to register, matching the intended behavior documented in the test suite.
+
+All tests passed successfully.

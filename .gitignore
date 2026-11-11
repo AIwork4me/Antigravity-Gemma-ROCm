@@ -28,4 +28,5 @@ Thumbs.db
 
 # Demo workspace runtime state (regenerated from pristine/ by preflight/demo)
 demo_workspace/
+devfest_workspace/
 scenarios/*/run/
