@@ -1,0 +1,11 @@
+run_command decision=DENY args={'CommandLine': 'dir', 'Cwd': '<repo>\\devfest_workspace', 'WaitMsBeforeAsync': 1000}
+run_command decision=DENY args={'CommandLine': 'ls', 'Cwd': '<repo>\\devfest_workspace', 'WaitMsBeforeAsync': 1000}
+run_command decision=DENY args={'CommandLine': 'python -c "import os; print(os.listdir(\'.\'))"', 'Cwd': '<repo>\\devfest_workspace', 'WaitMsBeforeAsync': 1000}
+file_tool decision=ALLOW path='<repo>/devfest_workspace/checkin.py'
+file_tool decision=ALLOW path='<repo>/devfest_workspace/tests/test_checkin.py'
+run_command decision=ALLOW args={'CommandLine': 'python -m pytest tests/ -q', 'Cwd': '<repo>\\devfest_workspace', 'WaitMsBeforeAsync': 1000}
+file_tool decision=ALLOW path='<none>'
+file_tool decision=ALLOW path='<repo>/devfest_workspace/checkin.py'
+file_tool decision=ALLOW path='<none>'
+file_tool decision=ALLOW path='<none>'
+run_command decision=ALLOW args={'CommandLine': 'python -m pytest tests/ -q', 'Cwd': '<repo>\\devfest_workspace', 'WaitMsBeforeAsync': 1000}

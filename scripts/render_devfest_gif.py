@@ -121,7 +121,7 @@ def render_gif(recording: dict, out: Path, width: int = 960, max_frames: int = 7
     line_h = 25
     pad = 16
     model = recording.get("meta", {}).get("model", "model")
-    header = f"  DevFest 2026 · Guangzhou — THE LAST SEAT  ·  {model} · local, no cloud"
+    header = f"  Google DevFest 2026 — THE LAST SEAT  ·  {model} · local, no cloud"
     lines_per_frame = 13
 
     frames: list[Image.Image] = []

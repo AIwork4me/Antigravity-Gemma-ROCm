@@ -1,0 +1,5 @@
+The root cause of the issue was an incorrect boundary condition in the `register` function in `checkin.py`. The condition `if registered >= capacity - 1:` was causing the registration to be rejected when 39 out of 40 seats were already taken, preventing the last person from getting the 40th seat.
+
+I have fixed this by changing the condition to `if registered >= capacity:`, which correctly allows registration as long as the current count is less than the capacity.
+
+All tests in `tests/test_checkin.py` now pass.

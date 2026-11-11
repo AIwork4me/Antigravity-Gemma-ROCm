@@ -54,10 +54,17 @@ CURATED_FILES = (
 
 def redact(text: str) -> str:
     # repo first: it is nested under home, and once "~" is substituted the
-    # longer repo marker would no longer match
-    text = text.replace(str(ROOT), "<repo>")
-    text = text.replace(str(ROOT).replace("\\", "/"), "<repo>")
-    text = text.replace(str(Path.home()), "~")
+    # longer repo marker would no longer match. Tool-call args are str(dict)
+    # reprs of json-escaped strings, so paths can appear with doubled or
+    # quadrupled backslashes — cover every escape depth.
+    repo = str(ROOT)
+    home = str(Path.home())
+    for depth in (4, 2, 1):  # quadruple first (longest marker), then double, native
+        esc = "\\" * depth
+        text = text.replace(repo.replace("\\", esc), "<repo>")
+        text = text.replace(home.replace("\\", esc), "~")
+    text = text.replace(repo.replace("\\", "/"), "<repo>")
+    text = text.replace(home.replace("\\", "/"), "~")
     return text
 
 
@@ -104,6 +111,14 @@ def gpu_evidence(model: str) -> dict:
         "gpu_100pct": False,
         "rocm_dll_processes": [],
         "backend": "unknown",
+        # V2 memory honesty: three distinct sources, never conflated
+        "model_file_size": None,
+        "runner_working_set": None,
+        "runner_size_note": (
+            "api/ps size is Ollama's own accounting — it does not equal the "
+            "model file size or the runner working set; never show it as "
+            "model VRAM usage"
+        ),
     }
     try:
         for m in http_json("http://127.0.0.1:11434/api/ps").get("models", []):
@@ -118,6 +133,36 @@ def gpu_evidence(model: str) -> dict:
                 break
     except Exception as e:
         ev["ps_error"] = f"{type(e).__name__}: {e}"
+    if ev["resident"]:
+        try:
+            for m in http_json("http://127.0.0.1:11434/api/tags").get("models", []):
+                if m.get("name") == model and isinstance(m.get("size"), int):
+                    ev["model_file_size"] = m["size"]
+                    break
+        except Exception:
+            pass
+        try:
+            ws = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq llama-server.exe", "/FO", "CSV", "/NH"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=15,
+            ).stdout
+            for ln in ws.splitlines():
+                parts = [p.strip().strip('"') for p in ln.split('","')]
+                if len(parts) >= 5 and parts[0].lower().startswith("llama-server"):
+                    mem = parts[4].replace(",", "").replace("\xa0", "").strip()
+                    if mem.endswith(" K"):
+                        mem = mem[:-2]
+                    try:
+                        ev["runner_working_set"] = int(mem) * 1024
+                        break
+                    except ValueError:
+                        continue
+        except Exception:
+            pass
     if ev["resident"]:
         out = subprocess.run(
             ["tasklist", "/m", "amdhip64*"],

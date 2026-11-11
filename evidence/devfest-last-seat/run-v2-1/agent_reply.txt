@@ -1,0 +1,5 @@
+The root cause of the issue was an incorrect boundary check in `checkin.py`. The `register` function was using `if registered >= capacity - 1:`, which rejected the 40th person when 39 people were already registered (since $39 \ge 40 - 1$ is true). 
+
+I updated the condition to `if registered >= capacity:`, which correctly allows the last person to register as long as the number of currently registered people is less than the total capacity.
+
+All tests in `tests/test_checkin.py` are now passing.

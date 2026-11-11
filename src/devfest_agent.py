@@ -50,6 +50,10 @@ EVIDENCE_ROOT = PROJECT_ROOT / "artifacts" / "devfest-agent-execution"
 # every other file must stay byte-identical for a run to count as a success.
 MUTABLE_ALLOWLIST = ("checkin.py",)
 
+# Tool names that WRITE files. The stage story treats observing one of these
+# as "the fix is being attempted" — never as "the fix is verified".
+EDIT_TOOL_NAMES = frozenset({"edit_file", "create_file", "replace_file_content"})
+
 MISSION = (
     "You are working in a small Python project in the current workspace. "
     "The project is the seat-registration system for a 40-seat workshop. "
@@ -218,8 +222,20 @@ async def run_agent_task(
     )
 
     t0 = time.time()
+    fire(
+        "sdk",
+        {
+            "phase": "agent_config_ready",
+            "model": model,
+            "base_url": base_url,
+            "preset": "lightweight",
+            "policies": "file tools: in-workspace path guard; run_command: pytest-only allowlist",
+        },
+    )
     async with Agent(config) as agent:
+        fire("sdk", {"phase": "agent_session_started"})
         response = await agent.chat(MISSION)
+        fire("sdk", {"phase": "mission_submitted", "mission_chars": len(MISSION)})
 
         async def collect_tokens():
             seen_audit = 0
@@ -234,17 +250,39 @@ async def run_agent_task(
                 seen_audit += 1
 
         async def collect_tool_calls():
+            seq = 0
             async for call in response.tool_calls:
+                seq += 1
                 ev = {
                     "name": getattr(call, "name", None),
                     "args": str(getattr(call, "args", None))[:2000],
                 }
                 tool_events.append(ev)
-                fire("tool", {"name": ev["name"], "args": display_shortened(ev["args"])})
+                # "observed" = the SDK reported this call on the tool_calls
+                # stream. It is NOT a claim that the tool ran successfully —
+                # only the acceptance chain (tests/files/probe) verifies that.
+                fire(
+                    "tool",
+                    {
+                        "name": ev["name"],
+                        "args": display_shortened(ev["args"]),
+                        "status": "observed",
+                        "seq": seq,
+                        "sdk": "google-antigravity",
+                    },
+                )
 
         await asyncio.wait_for(
             asyncio.gather(collect_tokens(), collect_tool_calls()), timeout=timeout_s
         )
+    fire(
+        "sdk",
+        {
+            "phase": "agent_response_completed",
+            "n_tool_calls": len(tool_events),
+            "reply_chars": len("".join(tokens)),
+        },
+    )
     elapsed = time.time() - t0
 
     (ev_dir / "mission.txt").write_text(MISSION, encoding="utf-8")
@@ -308,6 +346,7 @@ def run_full_task(
 
     if on_event:
         on_event("stage", {"name": "pytest_after", "text": "独立 pytest 验证（期望：全绿）"})
+        on_event("sdk", {"phase": "independent_verification_started"})
     post = run_pytest_independently(DEVFEST_WORKSPACE)
     (ev_dir / "pytest_after.json").write_text(json.dumps(post, indent=2), encoding="utf-8")
     if on_event:
@@ -345,10 +384,16 @@ def run_full_task(
         "elapsed_s": result["elapsed_s"],
         "n_tool_calls": result["n_tool_calls"],
         "tool_names": [t.get("name") for t in result["tool_events"]],
+        # short hashes of the changed files AFTER the run (developer-view
+        # evidence; the full SHA256 maps stay in workspace_after.json)
+        "sha256_after_short": {
+            rel: after.get(rel, {}).get("sha256", "")[:16] for rel in acc["files_changed"]
+        },
         **acc,
     }
     (ev_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     if on_event:
+        on_event("sdk", {"phase": "independent_verification_completed", "ok": acc["ok"]})
         disp_patch = display_shortened(diff or "", 8000)
         on_event("diff", {"files": acc["files_changed"], "patch": disp_patch})
         on_event("done", summary)

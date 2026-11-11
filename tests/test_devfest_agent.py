@@ -201,7 +201,16 @@ class TestFakeAgentEndToEnd:
             (ev_dir / "policy_audit.txt").write_text("run_command decision=ALLOW", encoding="utf-8")
             (ev_dir / "agent_reply.txt").write_text("fixed the boundary", encoding="utf-8")
             if on_event:
-                on_event("tool", {"name": "edit_file", "args": "checkin.py"})
+                # V2 shape: an OBSERVED tool call carries its sequence + status;
+                # "observed" never means the tool ran successfully
+                on_event(
+                    "tool",
+                    {"name": "edit_file", "args": "checkin.py", "status": "observed", "seq": 3},
+                )
+                on_event("sdk", {"phase": "agent_config_ready"})
+                on_event("sdk", {"phase": "agent_session_started"})
+                on_event("sdk", {"phase": "mission_submitted"})
+                on_event("sdk", {"phase": "agent_response_completed", "n_tool_calls": 4})
             return {"elapsed_s": 1.2, "n_tool_calls": 4, "tool_events": tool_events}
 
         monkeypatch.setattr(devfest_agent, "run_agent_task", fake_agent_task)
@@ -216,13 +225,33 @@ class TestFakeAgentEndToEnd:
     def test_full_task_succeeds_and_writes_evidence(self, isolated):
         ws, ev = isolated
         before_tree = self._tree_snapshot(ws.parent)
+        seen_events: list[tuple[str, object]] = []
 
-        summary = devfest_agent.run_full_task("fake-model", "http://x", 60, "fake-1")
+        def on_event(kind, data):
+            seen_events.append((kind, data))
+
+        summary = devfest_agent.run_full_task(
+            "fake-model", "http://x", 60, "fake-1", on_event=on_event
+        )
 
         assert summary["ok"] is True, summary
         assert summary["bug_present_before"] is True
         assert summary["bug_fixed_after"] is True
         assert summary["files_changed"] == ["checkin.py"]
+        # V2: short SHA256 of changed files ships with the summary (dev view)
+        assert set(summary["sha256_after_short"]) == {"checkin.py"}
+        assert len(summary["sha256_after_short"]["checkin.py"]) == 16
+        # V2: SDK verification lifecycle events must be emitted around the
+        # independent pytest acceptance
+        sdk_phases = [d.get("phase") for k, d in seen_events if k == "sdk" and isinstance(d, dict)]
+        assert "independent_verification_started" in sdk_phases
+        assert sdk_phases.index("independent_verification_started") < sdk_phases.index(
+            "independent_verification_completed"
+        )
+        completed = [d for d in sdk_phases if d == "independent_verification_completed"]
+        assert completed
+        done_events = [d for k, d in seen_events if k == "done"]
+        assert done_events and done_events[-1]["ok"] is True
         run_dir = ev / "run-fake-1"
         for f in (
             "summary.json",

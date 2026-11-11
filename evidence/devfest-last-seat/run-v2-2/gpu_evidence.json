@@ -1,0 +1,17 @@
+{
+  "model": "gemma4:26b",
+  "resident": true,
+  "digest": "001e5dafc3c77684c2307ebc6ab8e336e10c9b18eca52acf547d72fc83c3ca8c",
+  "size_vram": 2919298496,
+  "size": 2919298496,
+  "gpu_100pct": true,
+  "rocm_dll_processes": [
+    "97060"
+  ],
+  "backend": "ROCm VERIFIED",
+  "ollama_ps_text": "NAME          ID              SIZE      PROCESSOR    CONTEXT    RUNNER      UNTIL               \ngemma4:26b    001e5dafc3c7    2.9 GB    100% GPU     262144     llamacpp    29 minutes from now",
+  "model_file_size": 18731025629,
+  "runner_working_set": 40581943296,
+  "runner_working_set_sampled": "post-run sample at 2026-11-11 20:12:43 (same resident runner)",
+  "runner_size_note": "api/ps size is Ollama's own accounting — it does not equal the model file size or the runner working set; never show it as model VRAM usage"
+}
