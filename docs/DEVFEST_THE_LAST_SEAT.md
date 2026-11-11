@@ -350,6 +350,10 @@ All captured from real LIVE/REPLAY runs on the reference machine at
 | `docs/assets/v2-06-replay.png` | REPLAY — finished replay keeps its RECORDED RUN identity + watermark |
 | `docs/assets/devfest-last-seat-v2.gif` | story-arc GIF rendered from the real event recording |
 | `docs/assets/last-seat-recording.json` | the real recorded event stream (replay fallback) |
+| `docs/assets/devfest-last-seat-hero.gif` | README hero — real browser capture of this stage UI replaying `last-seat-recording.json` (run `stage-201902`, 1.5× time-compressed, 960×540 loop; regenerate: `scripts/capture_devfest_hero.py`) |
+| `docs/assets/devfest-last-seat-poster.png` | hero static first-frame poster (same capture) |
+| `docs/assets/devfest-last-seat-hero.meta.json` | hero capture metadata — source recording SHA256, run id, page identity assertions, scene timeline |
+| `docs/assets/devfest-agent-flow.png` | README Model/Harness/Compute diagram (`scripts/render_agent_flow.py`) |
 | `docs/assets/developer-before-fix.png` | (V3) right-panel overlap before the fix — stress replay, 1920×1080 |
 | `docs/assets/developer-before-fix-1704-badge-clip.png` | (V3) Builder Pass clipped at 1704×864 before the fix |
 | `docs/assets/developer-sdk-timeline-fixed.png` | (V3) SDK Timeline tab after the fix — real run |

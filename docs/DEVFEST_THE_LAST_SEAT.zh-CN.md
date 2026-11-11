@@ -329,6 +329,10 @@ powershell -ExecutionPolicy Bypass -File scripts\start-devfest-demo.ps1 -SkipWar
 | `docs/assets/v2-06-replay.png` | REPLAY —— 回放结束后保持 RECORDED RUN 身份 + 水印 |
 | `docs/assets/devfest-last-seat-v2.gif` | 由真实事件录制渲染的剧情弧 GIF |
 | `docs/assets/last-seat-recording.json` | 真实录制的事件流（回放兜底用） |
+| `docs/assets/devfest-last-seat-hero.gif` | README 首屏 Hero —— 真实浏览器捕获本舞台 UI 回放 `last-seat-recording.json`（run `stage-201902`，1.5× 时间压缩，960×540 循环；再生：`scripts/capture_devfest_hero.py`） |
+| `docs/assets/devfest-last-seat-poster.png` | Hero 静态首帧海报（同一次捕获） |
+| `docs/assets/devfest-last-seat-hero.meta.json` | Hero 捕获元数据 —— 源录制 SHA256、run id、页面身份断言、场景时间线 |
+| `docs/assets/devfest-agent-flow.png` | README 模型/Harness/算力关系图（`scripts/render_agent_flow.py`） |
 | `docs/assets/developer-before-fix.png` | （V3）修复前 —— 右面板重叠（压力回放，1920×1080） |
 | `docs/assets/developer-before-fix-1704-badge-clip.png` | （V3）修复前 —— 1704×864 徽章被裁 |
 | `docs/assets/developer-sdk-timeline-fixed.png` | （V3）修复后 —— SDK Timeline（真实运行） |

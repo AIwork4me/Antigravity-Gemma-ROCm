@@ -1,0 +1,69 @@
+{
+ "asset": "devfest-last-seat-hero.gif",
+ "source": {
+  "recording": "docs/assets/last-seat-recording.json",
+  "sha256": "39b4d8de25a0fa6dbe99b9a06840cfe94af32d19df399e60614791d3eae3bbdf",
+  "run_id": "stage-201902",
+  "model": "gemma4:26b",
+  "recorded_at": "2026-11-11 20:21:01",
+  "n_events": 157,
+  "tool_sequence": [
+   "run_command",
+   "view_file",
+   "view_file",
+   "edit_file",
+   "run_command"
+  ],
+  "pytest_tails": {
+   "before": "1 failed, 8 passed in 0.04s",
+   "after": "9 passed in 0.02s"
+  }
+ },
+ "capture": {
+  "run_id": "stage-201902",
+  "speed": 1.5,
+  "port": 8421,
+  "fps": 10.0,
+  "identity_banner": "🔁 REPLAY — 录制回放：run stage-201902 @ 2026-11-11 20:21:01（不代表当前硬件或实时验证）",
+  "run_id_in_banner": true,
+  "identity_ok": true,
+  "viewport": [
+   1536,
+   864
+  ],
+  "identity": "page banner asserted REPLAY with run id before any frame was kept"
+ },
+ "gif": {
+  "gif": "docs/assets/devfest-last-seat-hero.gif",
+  "gif_bytes": 359678,
+  "gif_width": 960,
+  "gif_height": 540,
+  "frames": 119,
+  "fps": 8.0,
+  "duration_s": 14.88,
+  "master_width": 1536
+ },
+ "poster": "docs/assets/devfest-last-seat-poster.png",
+ "scene_durations": {
+  "problem": 2.6,
+  "mission": 1.4,
+  "investigate": 3.2,
+  "model": 2.6,
+  "check": 2.2,
+  "celebrate": 2.8
+ },
+ "scenes": {
+  "problem": 21,
+  "mission": 11,
+  "investigate": 26,
+  "model": 21,
+  "check": 18,
+  "celebrate": 22
+ },
+ "honesty": {
+  "footage": "real browser rendering of the real stage UI replaying the real recorded run",
+  "replay_label": "in-page REPLAY banner + per-frame RECORDED RUN badge",
+  "time_compressed": true,
+  "live_gpu_metrics": "none read or overlaid"
+ }
+}
