@@ -12,11 +12,11 @@
 
 [English](README.md) | **简体中文**
 
-![The Last Seat —— 真实运行录制 · 时间压缩](docs/assets/devfest-last-seat-hero.gif)
+![The Last Seat —— 真实运行录制 · 剪辑精选](docs/assets/devfest-last-seat-hero.gif)
 
 **39/40 个席位，一次被错误拒绝的报名。** 本地 AI Agent 读懂代码、修掉 bug、跑通测试
 ——救回最后一席。
-*真实运行录制（`stage-201902`）· 时间压缩 · 画面来自真实舞台 UI——
+*真实运行录制（`stage-201902`）· 剪辑精选（1.5× 回放、分幕剪辑）· 画面来自真实舞台 UI——
 见[捕获元数据](docs/assets/devfest-last-seat-hero.meta.json)与
 [静态海报](docs/assets/devfest-last-seat-poster.png)。*
 
@@ -68,7 +68,7 @@
 前提：**Windows 11**、**Python 3.12 或 3.13**、**已安装并运行 Ollama**
 （`ollama --version` 能出版本号；若未装：`winget install --id Ollama.Ollama -e` 或
 [ollama.com](https://ollama.com)）、参考模型 `gemma4:26b`（约 18 GB 下载；运行时
-GPU 内存占用约 31 GB——在 128 GB 统一内存上实测）。
+实测运行占用：runner 工作集 40.6 GB——参考机为 128 GB 统一内存）。
 
 ```powershell
 git clone https://github.com/AIwork4me/Antigravity-Gemma-ROCm.git
@@ -150,12 +150,12 @@ SHA256 必须与审计映射吻合、业务探针必须放行第 40 位开发者
 | 项目 | 数值 |
 |---|---|
 | 模型 | `gemma4:26b`——25.2B MoE（激活 3.8B），Q4_K_M，256K 上下文，tools+thinking |
-| DevFest Agent 任务 | **6/6 全 PASS**（每次 81–114 秒、5–6 次工具调用）+ 3 次浏览器彩排——[台账](evidence/devfest-last-seat/validation_ledger.json) |
+| DevFest Agent 任务 | **6/6 全 PASS**（每次 78.7–115.0 秒、5–8 次工具调用）+ 3 次浏览器彩排——[台账](evidence/devfest-last-seat/validation_ledger.json) |
 | Bug 修复任务（A_boundary ×10） | 10/10 成功，64–107 秒（平均 87 秒） |
 | 长上下文 | 最多 49.4K prompt token 全对（文本 / JSON / 工具模式） |
 | 生成速度 | 短上下文约 48–50 tok/s；49K token 提示下约 27 tok/s |
 | 冷加载 / 热请求 | 约 52–73 秒 / 约 1 秒（提示缓存） |
-| GPU 内存（三种口径，绝不混用） | 模型文件 **18.73 GB**（`/api/tags`）· runner 工作集 **约 29–31 GB**（`tasklist` 实测）· `/api/ps` size **2.92 GB** = Ollama 自身记账，**不是**模型占用 |
+| GPU 内存（三种口径，绝不混用） | 模型文件 **18.73 GB**（`/api/tags`）· runner 工作集 **40.58 GB**（`tasklist`，逐运行 `gpu_evidence.json`）· `/api/ps` size **2.92 GB** = Ollama 自身记账，**不是**模型占用 |
 
 以上数字只针对本工作负载与本机型。舞台页绝不把 `/api/ps` size 当"模型显存占用"展示
 ——在这个版本上它实测就不是。完整方法学：

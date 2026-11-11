@@ -17,7 +17,9 @@
   "pytest_tails": {
    "before": "1 failed, 8 passed in 0.04s",
    "after": "9 passed in 0.02s"
-  }
+  },
+  "run_elapsed_s": 114.3,
+  "event_span_s": 123.8
  },
  "capture": {
   "run_id": "stage-201902",
@@ -35,34 +37,50 @@
  },
  "gif": {
   "gif": "docs/assets/devfest-last-seat-hero.gif",
-  "gif_bytes": 359678,
+  "gif_bytes": 552981,
   "gif_width": 960,
   "gif_height": 540,
   "frames": 119,
   "fps": 8.0,
   "duration_s": 14.88,
-  "master_width": 1536
+  "master_width": 1536,
+  "zoom_frames": {
+   "investigate": 14,
+   "check": 13
+  }
  },
  "poster": "docs/assets/devfest-last-seat-poster.png",
- "scene_durations": {
-  "problem": 2.6,
-  "mission": 1.4,
-  "investigate": 3.2,
-  "model": 2.6,
-  "check": 2.2,
-  "celebrate": 2.8
- },
- "scenes": {
-  "problem": 21,
-  "mission": 11,
-  "investigate": 26,
-  "model": 21,
-  "check": 18,
-  "celebrate": 22
+ "editing": {
+  "mode": "scene-cut highlights from one continuous browser replay of the real recording",
+  "replay_speed": 1.5,
+  "source_run_elapsed_s": 114.3,
+  "source_event_span_s": 123.8,
+  "final_gif_duration_s": 14.88,
+  "scene_durations_s": {
+   "problem": 2.6,
+   "mission": 1.4,
+   "investigate": 3.2,
+   "model": 2.6,
+   "check": 2.2,
+   "celebrate": 2.8
+  },
+  "per_scene_frames": {
+   "problem": 21,
+   "mission": 11,
+   "investigate": 26,
+   "model": 21,
+   "check": 18,
+   "celebrate": 22
+  },
+  "zoom_cuts": {
+   "investigate": "frames 45% into the scene onward are real-frame crops of the SDK panel region",
+   "check": "frames 30% into the scene onward are real-frame crops of the SDK panel region"
+  },
+  "guarantees": "event order never changed; frames come from the continuous replay capture only; crops are genuine browser pixels upscaled; no state, tool call, or verdict fabricated"
  },
  "honesty": {
   "footage": "real browser rendering of the real stage UI replaying the real recorded run",
-  "replay_label": "in-page REPLAY banner + per-frame RECORDED RUN badge",
+  "replay_label": "in-page REPLAY banner + per-frame RECORDED REAL RUN · EDITED HIGHLIGHTS badge",
   "time_compressed": true,
   "live_gpu_metrics": "none read or overlaid"
  }

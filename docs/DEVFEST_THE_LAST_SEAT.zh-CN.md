@@ -307,7 +307,7 @@ powershell -ExecutionPolicy Bypass -File scripts\start-devfest-demo.ps1 -SkipWar
 | 来源 | 数值（参考机） | 含义 |
 | --- | --- | --- |
 | `/api/tags` 模型条目 | 18.73 GB | 磁盘上的模型工件 |
-| `llama-server.exe` 工作集（`tasklist`） | ≈29–31 GB | 运行器真实占用（权重 + KV + 计算缓冲） |
+| `llama-server.exe` 工作集（`tasklist`） | 40.58 GB（V2 运行） | 运行器真实占用（权重 + KV + 计算缓冲）；V1 证据文件早于该字段加入 |
 | `/api/ps` `size`/`size_vram` | 2.92 GB（恒定） | Ollama 内部记账 —— **不是**模型占用 |
 
 因此舞台绝不用 `/api/ps` size 冒充「模型显存占用」；DEVELOPER VIEW 分
@@ -329,7 +329,7 @@ powershell -ExecutionPolicy Bypass -File scripts\start-devfest-demo.ps1 -SkipWar
 | `docs/assets/v2-06-replay.png` | REPLAY —— 回放结束后保持 RECORDED RUN 身份 + 水印 |
 | `docs/assets/devfest-last-seat-v2.gif` | 由真实事件录制渲染的剧情弧 GIF |
 | `docs/assets/last-seat-recording.json` | 真实录制的事件流（回放兜底用） |
-| `docs/assets/devfest-last-seat-hero.gif` | README 首屏 Hero —— 真实浏览器捕获本舞台 UI 回放 `last-seat-recording.json`（run `stage-201902`，1.5× 时间压缩，960×540 循环；再生：`scripts/capture_devfest_hero.py`） |
+| `docs/assets/devfest-last-seat-hero.gif` | README 首屏 Hero —— 真实浏览器捕获本舞台 UI 回放 `last-seat-recording.json`（run `stage-201902`，1.5× 回放剪辑成分幕精选，960×540 循环；再生：`scripts/capture_devfest_hero.py`） |
 | `docs/assets/devfest-last-seat-poster.png` | Hero 静态首帧海报（同一次捕获） |
 | `docs/assets/devfest-last-seat-hero.meta.json` | Hero 捕获元数据 —— 源录制 SHA256、run id、页面身份断言、场景时间线 |
 | `docs/assets/devfest-agent-flow.png` | README 模型/Harness/算力关系图（`scripts/render_agent_flow.py`） |

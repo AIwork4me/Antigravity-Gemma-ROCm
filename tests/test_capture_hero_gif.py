@@ -4,7 +4,7 @@ The honesty gate is the point of this module:
   - recordings that are not complete accepted runs must never yield success
     imagery (validate_recording raises);
   - out-of-order events must be rejected, not silently re-ordered;
-  - every produced frame carries the RECORDED RUN / TIME-COMPRESSED badge —
+  - every produced frame carries the RECORDED REAL RUN / EDITED HIGHLIGHTS badge —
     an unlabeled replay can never be packaged as live;
   - generated metadata never leaks absolute user paths;
   - assembled GIFs have sane dimensions and file sizes.
@@ -60,9 +60,30 @@ def _accepted_recording() -> dict:
             _event("story", {"stage": "fix"}),
             _event("story", {"stage": "check"}),
             _event("pytest", {"phase": "after", "exit": 0, "tail": "9 passed"}),
-            _event("done", {"ok": True, "elapsed_s": 90.0, "n_tool_calls": 2}),
+            _event(
+                "done",
+                {
+                    "run_id": "t-hero",
+                    "ok": True,
+                    "elapsed_s": 90.0,
+                    "n_tool_calls": 2,
+                    "bug_present_before": True,
+                    "bug_fixed_after": True,
+                    "tests_tampered": False,
+                    "forbidden_changed": [],
+                    "disk_drift": [],
+                },
+            ),
             _event("story", {"stage": "celebration"}),
-            _event("seat", {"phase": "final", "verified": True, "probe": {"admitted": True}}),
+            _event(
+                "seat",
+                {
+                    "phase": "final",
+                    "verified": True,
+                    "run_id": "t-hero",
+                    "probe": {"admitted": True, "seat": 40},
+                },
+            ),
         ],
     }
 
@@ -138,18 +159,125 @@ def test_validate_rejects_missing_verification_pair():
         validate_recording(rec)
 
 
+def test_validate_rejects_green_before_pytest():
+    """The bug must be demonstrated: a green 'before' run is invalid."""
+    rec = _accepted_recording()
+    rec["events"][2] = _event("pytest", {"phase": "before", "exit": 0, "tail": "9 passed"})
+    with pytest.raises(ValueError, match="before.*fail"):
+        validate_recording(rec)
+
+
+def test_validate_rejects_red_after_pytest():
+    rec = _accepted_recording()
+    rec["events"][9] = _event("pytest", {"phase": "after", "exit": 1, "tail": "1 failed"})
+    with pytest.raises(ValueError, match="after.*green"):
+        validate_recording(rec)
+
+
+def test_validate_rejects_tampered_tests():
+    rec = _accepted_recording()
+    rec["events"][10]["data"]["tests_tampered"] = True
+    with pytest.raises(ValueError, match="tampered"):
+        validate_recording(rec)
+
+
+def test_validate_rejects_forbidden_file_changes():
+    rec = _accepted_recording()
+    rec["events"][10]["data"]["forbidden_changed"] = ["outside.py"]
+    with pytest.raises(ValueError, match="whitelist"):
+        validate_recording(rec)
+
+
+def test_validate_rejects_disk_drift():
+    rec = _accepted_recording()
+    rec["events"][10]["data"]["disk_drift"] = ["checkin.py"]
+    with pytest.raises(ValueError, match="drift"):
+        validate_recording(rec)
+
+
+def test_validate_rejects_missing_acceptance_field():
+    rec = _accepted_recording()
+    rec["events"][10]["data"].pop("tests_tampered")
+    with pytest.raises(ValueError, match="acceptance field"):
+        validate_recording(rec)
+
+
+def test_validate_rejects_probe_not_admitted():
+    rec = _accepted_recording()
+    rec["events"][12]["data"]["probe"]["admitted"] = False
+    with pytest.raises(ValueError, match="admit"):
+        validate_recording(rec)
+
+
+def test_validate_rejects_wrong_seat():
+    rec = _accepted_recording()
+    rec["events"][12]["data"]["probe"]["seat"] = 39
+    with pytest.raises(ValueError, match="seat 39"):
+        validate_recording(rec)
+
+
+def test_validate_rejects_run_id_mismatch():
+    rec = _accepted_recording()
+    rec["events"][10]["data"]["run_id"] = "someone-elses-run"
+    with pytest.raises(ValueError, match="run_id"):
+        validate_recording(rec)
+
+
+def test_validate_rejects_verified_seat_before_done():
+    rec = _accepted_recording()
+    events = rec["events"]
+    i_done = next(i for i, e in enumerate(events) if e["kind"] == "done")
+    i_seat = next(
+        i for i, e in enumerate(events) if e["kind"] == "seat" and e["data"].get("verified")
+    )
+    events[i_done], events[i_seat] = events[i_seat], events[i_done]
+    with pytest.raises(ValueError, match="out of order"):
+        validate_recording(rec)
+
+
+def test_validate_rejects_done_before_green_pytest():
+    rec = _accepted_recording()
+    events = rec["events"]
+    i_after = next(
+        i for i, e in enumerate(events) if e["kind"] == "pytest" and e["data"]["phase"] == "after"
+    )
+    i_done = next(i for i, e in enumerate(events) if e["kind"] == "done")
+    events[i_after], events[i_done] = events[i_done], events[i_after]
+    with pytest.raises(ValueError, match="order"):
+        validate_recording(rec)
+
+
+def test_validate_rejects_no_edit_tool():
+    """Green tests with no observed edit = nothing was fixed."""
+    rec = _accepted_recording()
+    rec["events"] = [
+        e for e in rec["events"] if not (e["kind"] == "tool" and e["data"]["name"] == "edit_file")
+    ]
+    with pytest.raises(ValueError, match="edit tool"):
+        validate_recording(rec)
+
+
+def test_validate_rejects_multiple_done_events():
+    rec = _accepted_recording()
+    rec["events"].insert(11, _event("done", {"ok": True}))
+    with pytest.raises(ValueError, match="more than one done"):
+        validate_recording(rec)
+
+
 # ------------------------------------------------------------------- honesty
 def test_badge_always_identifies_recorded_replay():
     for scene in SCENES:
         left, right = badge_texts("t-hero", 1.5, scene)
-        assert "RECORDED RUN t-hero" in left
-        assert "TIME-COMPRESSED" in left
+        assert "RECORDED REAL RUN t-hero" in left
+        assert "EDITED HIGHLIGHTS" in left
         assert right  # every frame names its scene
 
 
-def test_badge_realtime_pace_is_labeled_too():
-    left, _ = badge_texts("t-hero", 1.0, "problem")
-    assert "RECORDED RUN" in left and "REAL-TIME PACE" in left
+def test_badge_never_claims_live_at_any_speed():
+    for speed in (0.5, 1.0, 1.5, 4.0):
+        left, _ = badge_texts("t-hero", speed, "problem")
+        assert "RECORDED REAL RUN" in left and "EDITED HIGHLIGHTS" in left
+        assert "LIVE" not in left
 
 
 def test_badge_text_has_no_paths_or_secrets():

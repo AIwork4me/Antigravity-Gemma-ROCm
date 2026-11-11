@@ -15,14 +15,21 @@ This is a browser-screen-capture pipeline (Playwright over the actual
      GIF (plus a poster PNG and a metadata sidecar).
 
 Honesty rules baked in (violations raise, they never render):
-  - the recording must be a COMPLETE accepted run (pytest red -> green,
-    ``done ok:true``, final verified seat). A recording without the final
-    acceptance chain is rejected — no success imagery can be produced;
+  - the recording must be a COMPLETE accepted run: pytest before FAILED
+    (non-zero exit), pytest after green (exit 0), an edit tool observed in
+    between, ``done ok:true`` with no test tampering / forbidden-file
+    changes / disk drift, and a final verified probe admitting seat 40 —
+    all under one run id, in the right order. Anything less is rejected:
+    no success imagery can be produced;
   - the page must visibly identify itself as REPLAY (banner names the
     run id); the capture aborts otherwise, and every GIF frame carries a
-    ``RECORDED RUN <id> · <speed>x TIME-COMPRESSED`` badge;
+    ``RECORDED REAL RUN <id> · EDITED HIGHLIGHTS`` badge;
   - no live GPU metrics are read or overlaid — replayed GPU events render
-    with the page's own ``[历史]`` prefix, as-is.
+    with the page's own ``[历史]`` prefix, as-is;
+  - the "edit" in EDITED HIGHLIGHTS is scene selection, per-scene pacing
+    and real-frame zoom crops only — event order is never changed and no
+    state, tool call, or verdict is ever fabricated (sidecar records the
+    exact editing: source span, replay speed, scene durations, cuts).
 
 The guided "camera" only switches views/tabs that a human could click
 (STAGE VIEW <-> DEVELOPER VIEW, tab selection); it never injects state,
@@ -86,10 +93,24 @@ _STORY_ORDER = ["problem", "mission", "investigation", "fix", "check", "celebrat
 def validate_recording(rec: dict) -> dict:
     """Reject anything that is not a complete, accepted REAL run.
 
-    Returns a summary (run_id, model, tool sequence, pytest tails, elapsed).
-    Raises ValueError on: bad container, unknown kinds, out-of-order story
-    stages, pytest before/after inversion, or a missing/failed final
-    acceptance chain (a failed run must never yield success imagery).
+    Returns a summary (run_id, model, tool sequence, pytest tails, elapsed,
+    event span). Raises ValueError on any of these honesty violations:
+
+      - bad container (not format 1 / no events / no meta run_id);
+      - unknown event kinds;
+      - out-of-order events (story stage regression, pytest after-before
+        inversion, acceptance before verification, verified seat before done);
+      - pytest "before" does not FAIL (exit must be non-zero — the bug must
+        be demonstrated before the run) or pytest "after" is not green;
+      - a done event that is not a full acceptance: ``ok:true``, not a
+        design preview, ``tests_tampered`` falsy, ``forbidden_changed`` and
+        ``disk_drift`` empty, bug present before and fixed after;
+      - the final business probe is not a verified admission of seat 40
+        (``verified:true`` + ``admitted:true`` + ``seat:40``);
+      - run-id mismatch: any event stamped with a run_id (the done event
+        must be) that differs from the recording meta.
+
+    A recording failing any of these can never yield success imagery.
     """
     if (
         not isinstance(rec, dict)
@@ -100,59 +121,122 @@ def validate_recording(rec: dict) -> dict:
     meta = rec.get("meta")
     if not isinstance(meta, dict) or not meta.get("run_id"):
         raise ValueError("recording meta must carry a run_id")
+    run_id = str(meta["run_id"])
     events = rec["events"]
     if not events:
         raise ValueError("recording has no events")
 
     stages_seen: list[str] = []
-    pytest_phases: list[str] = []
     tool_names: list[str] = []
-    done_ok: bool | None = None
-    verified_seat = False
-    for ev in events:
+    pytest_events: list[tuple[int, dict]] = []
+    done_idx: int | None = None
+    done_ev: dict | None = None
+    verified_seat_idx: int | None = None
+    verified_seat_ev: dict | None = None
+    for i, ev in enumerate(events):
         if not isinstance(ev, dict) or ev.get("kind") not in _KNOWN_KINDS:
             raise ValueError(
                 f"unknown replay event kind: {ev.get('kind') if isinstance(ev, dict) else type(ev)!r}"
             )
         kind, data = ev["kind"], ev.get("data")
-        if kind == "story" and isinstance(data, dict) and data.get("stage") in _STORY_ORDER:
+        if not isinstance(data, dict):
+            continue
+        ev_rid = data.get("run_id")
+        if isinstance(ev_rid, str) and ev_rid != run_id:
+            raise ValueError(f"event #{i} carries run_id {ev_rid!r} != recording run {run_id!r}")
+        if kind == "story" and data.get("stage") in _STORY_ORDER:
             stages_seen.append(data["stage"])
-        elif kind == "pytest" and isinstance(data, dict):
-            pytest_phases.append(str(data.get("phase")))
-        elif kind == "tool" and isinstance(data, dict) and data.get("name"):
+        elif kind == "pytest":
+            pytest_events.append((i, data))
+        elif kind == "tool" and data.get("name"):
             tool_names.append(str(data["name"]))
-        elif kind == "done" and isinstance(data, dict):
-            done_ok = data.get("ok") is True and not data.get("preview")
-        elif kind == "seat" and isinstance(data, dict) and data.get("verified") is True:
-            verified_seat = True
+        elif kind == "done":
+            if done_idx is not None:
+                raise ValueError("recording has more than one done event")
+            done_idx, done_ev = i, data
+        elif kind == "seat" and data.get("verified") is True:
+            if verified_seat_idx is not None:
+                raise ValueError("recording has more than one verified seat event")
+            verified_seat_idx, verified_seat_ev = i, data
 
+    # --- event order ------------------------------------------------------
     order_idx = [_STORY_ORDER.index(s) for s in stages_seen]
     if any(b <= a for a, b in zip(order_idx, order_idx[1:], strict=False)):
         raise ValueError("story stages regress or repeat out of order in the recording")
     if "problem" not in stages_seen or "celebration" not in stages_seen:
         raise ValueError("recording does not span problem -> celebration")
-    if "before" in pytest_phases and "after" in pytest_phases:
-        if pytest_phases.index("after") < pytest_phases.index("before"):
-            raise ValueError("pytest 'after' appears before 'before' in the recording")
-    elif "before" not in pytest_phases or "after" not in pytest_phases:
+    before_idx = next((i for i, d in pytest_events if d.get("phase") == "before"), None)
+    after_idx = next((i for i, d in pytest_events if d.get("phase") == "after"), None)
+    if before_idx is None or after_idx is None:
         raise ValueError("recording lacks the before/after pytest verification pair")
-    if done_ok is not True:
+    if after_idx < before_idx:
+        raise ValueError("pytest 'after' appears before 'before' in the recording")
+    first_edit = next(
+        (
+            i
+            for i, n in enumerate(events)
+            if n.get("kind") == "tool"
+            and isinstance(n.get("data"), dict)
+            and n["data"].get("name") in ("edit_file", "create_file", "replace_file_content")
+        ),
+        None,
+    )
+    if first_edit is None or first_edit > after_idx:
+        raise ValueError("no edit tool observed before the green pytest — nothing was fixed")
+    if done_idx is None:
+        raise ValueError("recording has no done event — refusing success imagery")
+    if done_idx < after_idx:
+        raise ValueError("acceptance (done) precedes the green pytest — out of order")
+    if verified_seat_idx is None:
+        raise ValueError("recording lacks the final verified seat — refusing success imagery")
+    if verified_seat_idx < done_idx:
+        raise ValueError("verified seat precedes acceptance (done) — out of order")
+
+    # --- pytest verdicts ---------------------------------------------------
+    before_ev = next(d for _, d in pytest_events if d.get("phase") == "before")
+    after_ev = next(d for _, d in pytest_events if d.get("phase") == "after")
+    if before_ev.get("exit") == 0 or not isinstance(before_ev.get("exit"), int):
+        raise ValueError(
+            "pytest 'before' did not fail (exit must be non-zero) — bug not demonstrated"
+        )
+    if after_ev.get("exit") != 0:
+        raise ValueError("pytest 'after' is not green (exit != 0) — refusing success imagery")
+
+    # --- full acceptance chain --------------------------------------------
+    if not isinstance(done_ev, dict) or done_ev.get("ok") is not True or done_ev.get("preview"):
         raise ValueError(
             "recording has no accepted completion (done ok:true) — refusing success imagery"
         )
-    if not verified_seat:
-        raise ValueError("recording lacks the final verified seat — refusing success imagery")
+    for field, why in (
+        ("tests_tampered", "frozen tests were tampered with"),
+        ("forbidden_changed", "files changed outside the whitelist"),
+        ("disk_drift", "on-disk state drifted from the audited map"),
+    ):
+        val = done_ev.get(field)
+        if val is None:
+            raise ValueError(f"done event lacks the {field!r} acceptance field")
+        if val:
+            raise ValueError(f"acceptance violated: {why} ({field}={val!r})")
+    if done_ev.get("bug_present_before") is not True:
+        raise ValueError("done event does not attest the bug was present before the run")
+    if done_ev.get("bug_fixed_after") is not True:
+        raise ValueError("done event does not attest the bug was fixed after the run")
+    if done_ev.get("run_id") != run_id:
+        raise ValueError(f"done event run_id {done_ev.get('run_id')!r} != recording run {run_id!r}")
 
-    done_ev = next(
-        e["data"] for e in events if e.get("kind") == "done" and isinstance(e.get("data"), dict)
-    )
-    pytest_tails = {
-        str(e["data"].get("phase")): str(e["data"].get("tail", ""))
-        for e in events
-        if e.get("kind") == "pytest" and isinstance(e.get("data"), dict)
-    }
+    # --- final business probe: verified admission of seat 40 ---------------
+    probe = verified_seat_ev.get("probe")
+    if not isinstance(probe, dict):
+        raise ValueError("verified seat event carries no probe verdict")
+    if probe.get("admitted") is not True:
+        raise ValueError("final probe did not admit (admitted != true) — refusing success imagery")
+    if probe.get("seat") != 40:
+        raise ValueError(f"final probe admitted seat {probe.get('seat')!r}, not seat 40")
+
+    pytest_tails = {str(d.get("phase")): str(d.get("tail", "")) for _, d in pytest_events}
+    ts = [e.get("ts") for e in events if isinstance(e.get("ts"), (int, float))]
     return {
-        "run_id": str(meta["run_id"]),
+        "run_id": run_id,
         "model": str(meta.get("model", "model")),
         "recorded_at": str(meta.get("recorded_at", "")),
         "n_events": len(events),
@@ -160,6 +244,7 @@ def validate_recording(rec: dict) -> dict:
         "pytest_tails": pytest_tails,
         "elapsed_s": done_ev.get("elapsed_s"),
         "n_tool_calls": done_ev.get("n_tool_calls"),
+        "event_span_s": round(max(ts) - min(ts), 1) if len(ts) >= 2 else None,
     }
 
 
@@ -203,13 +288,12 @@ DEFAULT_SCENE_DURATIONS = {
 
 
 def badge_texts(run_id: str, speed: float, scene: str) -> tuple[str, str]:
-    """(left, right) overlay chips. The left chip is the honesty badge — it
-    must always identify the footage as a time-compressed recorded replay."""
-    if speed and speed > 0 and abs(speed - 1.0) > 1e-9:
-        pace = f"{speed:g}x TIME-COMPRESSED"
-    else:
-        pace = "REAL-TIME PACE"
-    return (f"RECORDED RUN {run_id} · {pace}", SCENE_LABELS.get(scene, scene))
+    """(left, right) overlay chips. The left chip is the honesty badge: the
+    footage is always a RECORDED REAL RUN, and the loop is always an edited
+    highlights cut (scene selection + optional zoom on real frames) — never
+    a live claim, never an unlabeled replay. `speed` is kept in the
+    signature for API compatibility; the pace itself lives in the sidecar."""
+    return (f"RECORDED REAL RUN {run_id} · EDITED HIGHLIGHTS", SCENE_LABELS.get(scene, scene))
 
 
 def classify_frame(st: dict) -> str | None:
@@ -447,6 +531,41 @@ def select_scenes(
     return chosen
 
 
+# ---------------------------------------------------------------- zoom crops
+# Readability cuts: scenes whose payload lives in the right SDK panel get a
+# zoom made ONLY from the real captured frame — a crop of genuine browser
+# pixels, upscaled. Nothing is re-rendered or synthesized; the honesty bar
+# still labels every frame RECORDED REAL RUN · EDITED HIGHLIGHTS.
+# Values: (after_fraction, x0, y0, x1, y1) with coordinates as fractions of
+# the master frame. `after_fraction` = position within the scene where the
+# cut switches from the full-stage view to the zoom.
+ZOOM_SCENES: dict[str, tuple[float, float, float, float, float]] = {
+    # the real Antigravity SDK panel: pipeline + live tool cards
+    "investigate": (0.45, 0.468, 0.170, 0.981, 0.735),
+    # the Evidence tab: pytest red->green boxes + acceptance summary
+    "check": (0.30, 0.468, 0.300, 0.981, 0.800),
+}
+
+
+def _crop_169(im, fx0: float, fy0: float, fx1: float, fy1: float):
+    """Crop a fractional box from a real frame, widened/centered to exact
+    16:9 so the zoom fills the GIF canvas without distortion."""
+    w, h = im.size
+    x0, y0 = int(fx0 * w), int(fy0 * h)
+    x1, y1 = int(fx1 * w), int(fy1 * h)
+    cw = max(16, x1 - x0)
+    ch = max(9, y1 - y0)
+    if cw / ch > 16 / 9:  # too wide -> trim width, keep center
+        cw = round(ch * 16 / 9)
+        cx = (x0 + x1) // 2
+        x0, x1 = cx - cw // 2, cx + cw // 2
+    else:  # too tall -> trim height, keep center
+        ch = round(cw * 9 / 16)
+        cy = (y0 + y1) // 2
+        y0, y1 = cy - ch // 2, cy + ch // 2
+    return im.crop((max(0, x0), max(0, y0), min(w, x1), min(h, y1)))
+
+
 def _font(size: int, bold: bool = False):
     from PIL import ImageFont
 
@@ -499,18 +618,29 @@ def assemble_gif(
     gif_fps: float = 8.0,
     poster_out: Path | None = None,
 ) -> dict:
-    """Quantize, badge, and encode the curated frames into the looping GIF."""
+    """Quantize, badge, and encode the curated frames into the looping GIF.
+
+    Scenes listed in ZOOM_SCENES start on the full-stage view, then cut to a
+    zoom crop taken from the SAME real captured frames (no re-rendering).
+    """
     from PIL import Image
 
-    seq: list[tuple[int, str]] = [(idx, sc) for sc in SCENES for idx in chosen[sc]]
+    seq: list[tuple[int, int, str]] = [
+        (pos, idx, sc) for sc in SCENES for pos, idx in enumerate(chosen[sc])
+    ]
     if not seq:
         raise ValueError("no frames selected — capture produced no usable scenes")
     master_w = None
     pil_frames: list[Image.Image] = []
-    for idx, sc in seq:
+    zoom_used: dict[str, int] = {}
+    for pos, idx, sc in seq:
         p = frames_dir / f"{idx:04d}.png"
         im = Image.open(p).convert("RGB")
         master_w = im.size[0]
+        if sc in ZOOM_SCENES and pos >= round(ZOOM_SCENES[sc][0] * len(chosen[sc])):
+            _, fx0, fy0, fx1, fy1 = ZOOM_SCENES[sc]
+            im = _crop_169(im, fx0, fy0, fx1, fy1)
+            zoom_used[sc] = zoom_used.get(sc, 0) + 1
         if im.size[0] != gif_width:
             im = im.resize((gif_width, round(im.size[1] * gif_width / im.size[0])), Image.LANCZOS)
         overlay_badge(im, run_id, speed, sc)
@@ -557,6 +687,7 @@ def assemble_gif(
         "fps": gif_fps,
         "duration_s": round(len(qframes) * duration_ms / 1000, 2),
         "master_width": master_w,
+        "zoom_frames": zoom_used,
         "poster": str(poster_path) if poster_path else None,
     }
 
@@ -618,7 +749,8 @@ def main() -> int:
     if args.reuse_frames:
         payload = json.loads((args.workdir / "states.json").read_text(encoding="utf-8"))
         states = payload["states"]
-        summary = payload["summary"]
+        # summary stays the one freshly validated from the recording above —
+        # the cached one may predate new validation fields (e.g. event_span_s)
         meta = payload["meta"]
     else:
         got = capture_frames(
@@ -658,19 +790,41 @@ def main() -> int:
             "n_events": summary["n_events"],
             "tool_sequence": summary["tool_sequence"],
             "pytest_tails": summary["pytest_tails"],
+            "run_elapsed_s": summary.get("elapsed_s"),
+            "event_span_s": summary.get("event_span_s"),
         },
         "capture": {
             **meta,
             "viewport": [args.viewport_w, args.viewport_h],
             "identity": "page banner asserted REPLAY with run id before any frame was kept",
         },
-        "gif": {**{k: v for k, v in result.items() if k != "poster"}, "gif": _rel(result["gif"])},
+        "gif": {
+            **{k: v for k, v in result.items() if k != "poster"},
+            "gif": _rel(result["gif"]),
+            "duration_s": result["duration_s"],
+        },
         "poster": _rel(result.get("poster")),
-        "scene_durations": durations,
-        "scenes": {sc: len(idx) for sc, idx in chosen.items()},
+        "editing": {
+            "mode": "scene-cut highlights from one continuous browser replay of the real recording",
+            "replay_speed": float(meta.get("speed", args.speed)),
+            "source_run_elapsed_s": summary.get("elapsed_s"),
+            "source_event_span_s": summary.get("event_span_s"),
+            "final_gif_duration_s": result["duration_s"],
+            "scene_durations_s": durations,
+            "per_scene_frames": {sc: len(idx) for sc, idx in chosen.items()},
+            "zoom_cuts": {
+                sc: f"frames {ZOOM_SCENES[sc][0]:.0%} into the scene onward are real-frame crops of the SDK panel region"
+                for sc in result.get("zoom_frames", {})
+            },
+            "guarantees": (
+                "event order never changed; frames come from the continuous replay capture "
+                "only; crops are genuine browser pixels upscaled; no state, tool call, or "
+                "verdict fabricated"
+            ),
+        },
         "honesty": {
             "footage": "real browser rendering of the real stage UI replaying the real recorded run",
-            "replay_label": "in-page REPLAY banner + per-frame RECORDED RUN badge",
+            "replay_label": "in-page REPLAY banner + per-frame RECORDED REAL RUN · EDITED HIGHLIGHTS badge",
             "time_compressed": abs(float(meta.get("speed", args.speed)) - 1.0) > 1e-9,
             "live_gpu_metrics": "none read or overlaid",
         },
