@@ -733,6 +733,17 @@ class TestClientRendering:
         assert "Can a Local AI Agent Save the Final Seat?" in page
         assert "39 Registered" in page and "1 Seat Left" in page
 
+    def test_brand_is_one_line(self):
+        """'Google DevFest 2026' and 'THE LAST SEAT' share one brand line
+        (boss review): both sit inside the same .brandline flex row."""
+        page = dw.PAGE
+        assert 'class="brandline"' in page
+        start = page.index('class="brandline"')
+        end = page.index("</div>", page.index("demotitle", start))
+        row = page[start:end]
+        assert "gbrand" in row and "THE LAST SEAT" in row
+        assert "tagline" not in row  # tagline stays on its own line below
+
     def test_google_palette_used(self):
         for color in ("#4285F4", "#34A853", "#EA4335", "#FBBC04"):
             assert color in dw.PAGE

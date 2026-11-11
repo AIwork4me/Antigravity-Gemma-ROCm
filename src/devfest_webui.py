@@ -1005,10 +1005,13 @@ background:linear-gradient(180deg,#232323,#1E1E1E)}
 background:linear-gradient(90deg,var(--blue) 0 25%,var(--red) 25% 50%,var(--yellow) 50% 75%,var(--green) 75% 100%)}
 .hrow{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
 .brandblock{min-width:0}
-.gbrand{font-size:30px;font-weight:800;letter-spacing:.5px;line-height:1.15}
+.brandline{display:flex;align-items:baseline;gap:16px;flex-wrap:nowrap}
+.gbrand{font-size:30px;font-weight:800;letter-spacing:.5px;line-height:1.15;white-space:nowrap}
 .gbrand .gb{color:var(--blue)}.gbrand .gr{color:var(--red)}.gbrand .gy{color:var(--yellow)}
 .gbrand .gg{color:var(--green)}.gbrand .grest{color:var(--txt)}
-.demotitle{font-size:26px;font-weight:900;letter-spacing:8px;color:var(--txt);margin-top:2px}
+.bsep{width:34px;height:5px;border-radius:3px;align-self:center;flex:none;
+background:linear-gradient(90deg,var(--blue) 0 25%,var(--red) 25% 50%,var(--yellow) 50% 75%,var(--green) 75% 100%)}
+.demotitle{font-size:27px;font-weight:900;letter-spacing:7px;color:var(--txt);white-space:nowrap}
 .tagline{color:var(--dim);font-size:14px;font-weight:400;margin-top:3px}
 .tagline b{color:#E8EAED;font-weight:700}
 .hright{margin-left:auto;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
@@ -1192,6 +1195,7 @@ width:92%;max-height:80vh;overflow-y:auto;padding:22px}
 #evmodal pre{background:#141414;border:1px solid var(--line);border-radius:10px;padding:10px;
 font-size:12px;overflow-x:auto;white-space:pre-wrap}
 @media (max-width:1100px){main{grid-template-columns:1fr}.seatnum .n{font-size:46px}
+.brandline{flex-wrap:wrap}
 body{overflow:auto}}
 @media (prefers-reduced-motion: reduce){
 *{animation:none!important;transition:none!important}
@@ -1202,8 +1206,11 @@ body{overflow:auto}}
 <header><div class="hbar"></div>
  <div class="hrow">
   <div class="brandblock">
-   <div class="gbrand"><span class="gb">G</span><span class="gr">o</span><span class="gy">o</span><span class="gb">g</span><span class="gg">l</span><span class="gr">e</span><span class="grest">&nbsp;DevFest 2026</span></div>
-   <div class="demotitle">THE LAST SEAT</div>
+   <div class="brandline">
+    <div class="gbrand"><span class="gb">G</span><span class="gr">o</span><span class="gy">o</span><span class="gb">g</span><span class="gg">l</span><span class="gr">e</span><span class="grest">&nbsp;DevFest 2026</span></div>
+    <span class="bsep" aria-hidden="true"></span>
+    <div class="demotitle">THE LAST SEAT</div>
+   </div>
    <div class="tagline"><b>Can a Local AI Agent Save the Final Seat?</b> — 39 Registered · 1 Seat Left · Registration Denied</div>
   </div>
   <div class="hright">
