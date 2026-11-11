@@ -307,7 +307,7 @@ powershell -ExecutionPolicy Bypass -File scripts\start-devfest-demo.ps1 -SkipWar
 | 来源 | 数值（参考机） | 含义 |
 | --- | --- | --- |
 | `/api/tags` 模型条目 | 18.73 GB | 磁盘上的模型工件 |
-| `llama-server.exe` 工作集（`tasklist`） | 40.58 GB（V2 运行） | 运行器真实占用（权重 + KV + 计算缓冲）；V1 证据文件早于该字段加入 |
+| `llama-server.exe` 工作集（`tasklist`） | 40.58 GB（V2 运行） | 运行器的 Windows 进程工作集（操作系统视角的权重 + KV + 计算缓冲）——非独立测量的 GPU 显存值；V1 证据文件早于该字段加入 |
 | `/api/ps` `size`/`size_vram` | 2.92 GB（恒定） | Ollama 内部记账 —— **不是**模型占用 |
 
 因此舞台绝不用 `/api/ps` size 冒充「模型显存占用」；DEVELOPER VIEW 分

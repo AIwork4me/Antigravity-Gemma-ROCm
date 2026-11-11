@@ -326,7 +326,7 @@ different "sizes"** that must never be conflated:
 | Source | Value (reference machine) | Meaning |
 | --- | --- | --- |
 | `/api/tags` model entry | 18.73 GB | the on-disk model artifact |
-| `llama-server.exe` working set (`tasklist`) | 40.58 GB (V2 runs) | the real runner footprint (weights + KV + compute); the V1 evidence files predate this field |
+| `llama-server.exe` working set (`tasklist`) | 40.58 GB (V2 runs) | the runner's Windows Process Working Set (weights + KV + compute as seen by the OS) — not an independently measured GPU VRAM figure; the V1 evidence files predate this field |
 | `/api/ps` `size`/`size_vram` | 2.92 GB, constant | Ollama-internal accounting — NOT the model footprint |
 
 Consequently the stage never presents `/api/ps` size as "model VRAM usage";

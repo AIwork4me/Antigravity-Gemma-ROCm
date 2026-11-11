@@ -68,7 +68,7 @@
 前提：**Windows 11**、**Python 3.12 或 3.13**、**已安装并运行 Ollama**
 （`ollama --version` 能出版本号；若未装：`winget install --id Ollama.Ollama -e` 或
 [ollama.com](https://ollama.com)）、参考模型 `gemma4:26b`（约 18 GB 下载；运行时
-实测运行占用：runner 工作集 40.6 GB——参考机为 128 GB 统一内存）。
+参考机（128 GB 统一内存）实测：`llama-server.exe` 进程工作集约 40.6 GB——Windows 工作集口径，非独立测量的 GPU 显存值）。
 
 ```powershell
 git clone https://github.com/AIwork4me/Antigravity-Gemma-ROCm.git
@@ -155,7 +155,7 @@ SHA256 必须与审计映射吻合、业务探针必须放行第 40 位开发者
 | 长上下文 | 最多 49.4K prompt token 全对（文本 / JSON / 工具模式） |
 | 生成速度 | 短上下文约 48–50 tok/s；49K token 提示下约 27 tok/s |
 | 冷加载 / 热请求 | 约 52–73 秒 / 约 1 秒（提示缓存） |
-| GPU 内存（三种口径，绝不混用） | 模型文件 **18.73 GB**（`/api/tags`）· runner 工作集 **40.58 GB**（`tasklist`，逐运行 `gpu_evidence.json`）· `/api/ps` size **2.92 GB** = Ollama 自身记账，**不是**模型占用 |
+| 模型存储与运行时内存观测（不同统计口径） | 模型文件 **18.73 GB**（`/api/tags`）· `llama-server.exe` **40.58 GB** = Windows 进程工作集（`tasklist`，逐运行 `gpu_evidence.json`）——进程级观测值，**不是**独立测量的 GPU 显存使用量 · `/api/ps` size **2.92 GB** = Ollama 自身记账，**不是**模型占用 |
 
 以上数字只针对本工作负载与本机型。舞台页绝不把 `/api/ps` size 当"模型显存占用"展示
 ——在这个版本上它实测就不是。完整方法学：

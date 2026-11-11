@@ -71,7 +71,8 @@ Full stage documentation: [docs/DEVFEST_THE_LAST_SEAT.md](docs/DEVFEST_THE_LAST_
 Prerequisites: **Windows 11**, **Python 3.12 or 3.13**, **Ollama installed and running**
 (`ollama --version` must print; if missing: `winget install --id Ollama.Ollama -e` or
 [ollama.com](https://ollama.com)), and the reference model `gemma4:26b` (≈18 GB
-download; measured runtime footprint: 40.6 GB runner working set on the 128 GB reference machine).
+download; measured on the 128 GB reference machine: `llama-server.exe` process working set
+≈40.6 GB — a Windows working-set observation, not an independently measured GPU VRAM figure).
 
 ```powershell
 git clone https://github.com/AIwork4me/Antigravity-Gemma-ROCm.git
@@ -161,7 +162,7 @@ Reference machine: ASUS ProArt PX13 — Ryzen AI MAX+ 395 (16C/32T), Radeon 8060
 | Long-context | correct up to 49.4K prompt tokens (text / JSON / tool modes) |
 | Generation | ~48–50 tok/s short ctx; ~27 tok/s @ 49K-token prompts |
 | Cold load / warm request | ~52–73 s / ~1 s (prompt cache) |
-| GPU memory (three sources, never conflated) | model file **18.73 GB** (`/api/tags`) · runner working set **40.58 GB** (`tasklist`, per-run `gpu_evidence.json`) · `/api/ps` size **2.92 GB** = Ollama's own accounting, **not** the model footprint |
+| Model storage & runtime memory observations (different measurement scopes) | model file **18.73 GB** (`/api/tags`) · `llama-server.exe` **40.58 GB** = Windows Process Working Set (`tasklist`, per-run `gpu_evidence.json`) — a process-level observation, **not** an independently measured GPU VRAM usage · `/api/ps` size **2.92 GB** = Ollama's own accounting, **not** the model footprint |
 
 These numbers are for *this* workload and machine. The stage never shows `/api/ps` size
 as "model VRAM usage" — on this build it demonstrably isn't. Full methodology:
